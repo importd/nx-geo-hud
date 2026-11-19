@@ -148,6 +148,9 @@ LRESULT OverlayWindow::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
                 if (!enabled_) ShowWindow(hwnd_, SW_HIDE);
             }
             return 0;
+        case WM_RBUTTONUP:
+            ShowTrayMenu();          // 面板上右键也出同一个菜单
+            return 0;
         case WM_PAINT: {
             PAINTSTRUCT ps;
             HDC dc = BeginPaint(hwnd_, &ps);
@@ -300,22 +303,59 @@ void OverlayWindow::RemoveTrayIcon() {
     }
 }
 
+// 系统图标转成菜单能用的位图（底色用菜单色，避免黑框）
+HBITMAP IconToMenuBitmap(HICON icon) {
+    if (icon == nullptr) return nullptr;
+    HDC screen = GetDC(nullptr);
+    HDC mem = CreateCompatibleDC(screen);
+    HBITMAP bitmap = CreateCompatibleBitmap(screen, 16, 16);
+    HGDIOBJ old = SelectObject(mem, bitmap);
+
+    RECT box{ 0, 0, 16, 16 };
+    HBRUSH background = CreateSolidBrush(GetSysColor(COLOR_MENU));
+    FillRect(mem, &box, background);
+    DeleteObject(background);
+
+    DrawIconEx(mem, 0, 0, icon, 16, 16, 0, nullptr, DI_NORMAL);
+
+    SelectObject(mem, old);
+    DeleteDC(mem);
+    ReleaseDC(nullptr, screen);
+    return bitmap;
+}
+
 void OverlayWindow::ShowTrayMenu() {
     POINT cursor{};
     GetCursorPos(&cursor);
 
     HMENU menu = CreatePopupMenu();
-    AppendMenuW(menu, MF_STRING, kTrayCopy, L"复制当前信息");
-    AppendMenuW(menu, MF_STRING | (pinned_ ? MF_CHECKED : 0), kTrayPin, L"钉住面板");
-    AppendMenuW(menu, MF_STRING | (clickThrough_ ? MF_CHECKED : 0), kTrayClickThrough, L"鼠标点穿");
-    AppendMenuW(menu, MF_STRING, kTrayHide, L"隐藏面板");
+
+    AppendMenuW(menu, MF_STRING, kTrayCopy, L"复制信息\tCtrl+C");
+    AppendMenuW(menu, MF_STRING | (pinned_ ? MF_CHECKED : 0), kTrayPin, L"钉住面板\tCtrl+P");
+    AppendMenuW(menu, MF_STRING | (clickThrough_ ? MF_CHECKED : 0), kTrayClickThrough, L"鼠标点穿\tCtrl+T");
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(menu, MF_STRING, kTrayHide, L"隐藏面板\tCtrl+Alt+G");
     AppendMenuW(menu, MF_STRING, kTrayQuit, L"退出");
+
+    // 菜单项图标
+    HBITMAP copyIcon = IconToMenuBitmap(static_cast<HICON>(LoadImageW(nullptr, IDI_INFORMATION, IMAGE_ICON, 16, 16, LR_SHARED)));
+    HBITMAP pinIcon = IconToMenuBitmap(static_cast<HICON>(LoadImageW(nullptr, IDI_APPLICATION, IMAGE_ICON, 16, 16, LR_SHARED)));
+    HBITMAP hideIcon = IconToMenuBitmap(static_cast<HICON>(LoadImageW(nullptr, IDI_WARNING, IMAGE_ICON, 16, 16, LR_SHARED)));
+    HBITMAP quitIcon = IconToMenuBitmap(static_cast<HICON>(LoadImageW(nullptr, IDI_ERROR, IMAGE_ICON, 16, 16, LR_SHARED)));
+    SetMenuItemBitmaps(menu, kTrayCopy, MF_BYCOMMAND, copyIcon, copyIcon);
+    SetMenuItemBitmaps(menu, kTrayPin, MF_BYCOMMAND, pinIcon, pinIcon);
+    SetMenuItemBitmaps(menu, kTrayHide, MF_BYCOMMAND, hideIcon, hideIcon);
+    SetMenuItemBitmaps(menu, kTrayQuit, MF_BYCOMMAND, quitIcon, quitIcon);
 
     SetForegroundWindow(hwnd_);
     const int command = TrackPopupMenu(menu, TPM_RIGHTBUTTON | TPM_RETURNCMD,
                                        cursor.x, cursor.y, 0, hwnd_, nullptr);
     DestroyMenu(menu);
+
+    DeleteObject(copyIcon);
+    DeleteObject(pinIcon);
+    DeleteObject(hideIcon);
+    DeleteObject(quitIcon);
 
     switch (command) {
         case kTrayCopy:

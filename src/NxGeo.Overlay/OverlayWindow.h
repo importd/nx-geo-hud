@@ -37,7 +37,7 @@ private:
     InfoViewModel    vm_;
     int              width_ = 360;
     int              height_ = 120;
-    bool             clickThrough_ = true;
+    bool             clickThrough_ = false;   // 默认接收鼠标，右键才能出菜单
     bool             enabled_ = true;
     bool             pinned_ = false;
     std::string      lastLogged_;
