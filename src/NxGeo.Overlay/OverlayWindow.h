@@ -34,7 +34,6 @@ private:
     int  ContentHeight() const;
     bool ShouldStayVisible();
     HWND NxWindow();
-    bool SendEscapeToNx();
     void PlaceAtCursor();
     void LoadLayout();
     void SaveLayout();
@@ -48,6 +47,8 @@ private:
 
     int              width_ = 320;
     int              height_ = 120;
+    int              autoX_ = INT_MIN;       // 上次自动出现的位置（复位回这里）
+    int              autoY_ = INT_MIN;
     int              anchorX_ = INT_MIN;
     int              anchorY_ = INT_MIN;
     bool             autoPlace_ = true;      // 新对象贴在点击位置
@@ -56,7 +57,6 @@ private:
     unsigned         lastTag_ = 0;
     bool             dragging_ = false;
     bool             dragMoved_ = false;
-    DWORD            suppressUntil_ = 0;   // 点了取消选择后短暂压制，避免闪
     POINT            dragStartCursor_{};
     RECT             dragStartRect_{};
 

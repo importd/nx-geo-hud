@@ -22,7 +22,7 @@ constexpr int kTitleWidth = 64;
 constexpr int kToolbarHeight = 20;
 constexpr int kButton = 16;
 constexpr int kButtonGap = 2;
-constexpr int kButtonCount = 3;          // 取消选择 / 复位 / 关闭
+constexpr int kButtonCount = 2;          // 复位 / 关闭
 constexpr wchar_t kClassName[] = L"NxGeoOverlayWindow";
 constexpr BYTE kAlpha = 170;
 
@@ -65,25 +65,6 @@ HWND FindMainWindowForPid(DWORD pid) {
     return context.result;
 }
 
-struct TopLevelCount {
-    DWORD pid;
-    int   count;
-};
-
-BOOL CALLBACK CountTopLevelProc(HWND hwnd, LPARAM param) {
-    auto* context = reinterpret_cast<TopLevelCount*>(param);
-    DWORD pid = 0;
-    GetWindowThreadProcessId(hwnd, &pid);
-    if (pid == context->pid && IsWindowVisible(hwnd)) ++context->count;
-    return TRUE;
-}
-
-// NX 空闲时只有主框架一个可见顶层窗口；有命令对话框时会多出来
-int CountNxTopLevelWindows(DWORD pid) {
-    TopLevelCount context{ pid, 0 };
-    EnumWindows(&CountTopLevelProc, reinterpret_cast<LPARAM>(&context));
-    return context.count;
-}
 
 }  // namespace
 
@@ -131,8 +112,17 @@ bool OverlayWindow::Create(HINSTANCE instance, unsigned long long nxHwnd, int nx
 void OverlayWindow::PlaceAtCursor() {
     POINT cursor{};
     GetCursorPos(&cursor);
-    anchorX_ = cursor.x + 20;
-    anchorY_ = cursor.y + 24;
+
+    const HWND nx = NxWindow();
+    RECT nxRect{ 0, 0, 0, 0 };
+    if (nx != nullptr) GetWindowRect(nx, &nxRect);
+
+    const Placement p = ComputePlacement(cursor.x, cursor.y, width_, height_,
+                                         nxRect.left, nxRect.top, nxRect.right, nxRect.bottom);
+    anchorX_ = p.x;
+    anchorY_ = p.y;
+    autoX_ = p.x;      // 记住这个位置，复位就回这里
+    autoY_ = p.y;
     lastX_ = INT_MIN;
     lastY_ = INT_MIN;
 }
@@ -268,31 +258,6 @@ bool OverlayWindow::ShouldStayVisible() {
 }
 
 // 给 NX 的焦点窗口投递 Esc：NX 自己清空选择与高亮，等价于它的「取消选择」
-bool OverlayWindow::SendEscapeToNx() {
-    const HWND nx = NxWindow();
-    if (nx == nullptr) return false;
-
-    // 护栏：有命令对话框开着就不发，避免把用户正在做的命令取消掉
-    const int windows = CountNxTopLevelWindows(nxPid_);
-    if (windows > 1) {
-        NxGeoLog::Write("deselect: blocked, NX busy (top-level windows=" + std::to_string(windows) + ")");
-        return false;
-    }
-
-    DWORD pid = 0;
-    const DWORD threadId = GetWindowThreadProcessId(nx, &pid);
-    HWND target = nx;
-    GUITHREADINFO info{};
-    info.cbSize = sizeof info;
-    if (GetGUIThreadInfo(threadId, &info) && info.hwndFocus != nullptr) {
-        target = info.hwndFocus;
-    }
-
-    PostMessageW(target, WM_KEYDOWN, VK_ESCAPE, 0x00000001);
-    PostMessageW(target, WM_KEYUP, VK_ESCAPE, 0xC0000001);
-    NxGeoLog::Write("deselect: posted ESC to NX");
-    return true;
-}
 
 void OverlayWindow::LoadLayout() {
     std::ifstream file(ExeDir() + L"\\nxgeo.layout");
@@ -419,24 +384,26 @@ void OverlayWindow::DrawToolbar(HDC dc) {
 
     for (int i = 0; i < kButtonCount; ++i) {
         const int x = startX + i * (kButton + kButtonGap);
+        const int cx = x + kButton / 2;      // 按钮中心，所有图元都按中心定位
+        const int cy = y + kButton / 2;
+
         switch (i) {
-            case 0:   // 取消选择：圆圈加斜杠
-                Ellipse(dc, x + 3, y + 3, x + 13, y + 13);
-                MoveToEx(dc, x + 5, y + 5, nullptr);
-                LineTo(dc, x + 11, y + 11);
+            case 0: {  // 复位：开口圆环 + 箭头
+                const int r = 5;
+                MoveToEx(dc, cx + r, cy, nullptr);
+                AngleArc(dc, cx, cy, r, 0.0f, 300.0f);
+                const int ex = cx + r - 2;
+                const int ey = cy - 3;
+                MoveToEx(dc, ex, ey + 3, nullptr);
+                LineTo(dc, ex + 1, ey);
+                LineTo(dc, ex + 4, ey + 1);
                 break;
-            case 1:   // 复位：回转箭头
-                Arc(dc, x + 2, y + 2, x + 14, y + 14, x + 14, y + 8, x + 8, y + 2);
-                MoveToEx(dc, x + 8, y + 2, nullptr);
-                LineTo(dc, x + 11, y + 2);
-                MoveToEx(dc, x + 8, y + 2, nullptr);
-                LineTo(dc, x + 8, y + 5);
-                break;
-            case 2: { // 关闭：红叉
+            }
+            case 1: {  // 关闭：红叉
                 HPEN red = CreatePen(PS_SOLID, 2, RGB(230, 90, 80));
                 HGDIOBJ previous = SelectObject(dc, red);
-                MoveToEx(dc, x + 4, y + 4, nullptr);   LineTo(dc, x + 12, y + 12);
-                MoveToEx(dc, x + 12, y + 4, nullptr);  LineTo(dc, x + 4, y + 12);
+                MoveToEx(dc, cx - 4, cy - 4, nullptr);  LineTo(dc, cx + 4, cy + 4);
+                MoveToEx(dc, cx + 4, cy - 4, nullptr);  LineTo(dc, cx - 4, cy + 4);
                 SelectObject(dc, previous);
                 DeleteObject(red);
                 break;
@@ -463,18 +430,20 @@ int OverlayWindow::ToolbarHit(int x, int y) const {
 
 void OverlayWindow::PerformToolbarAction(int index) {
     switch (index) {
-        case 0:   // 取消选择：让 NX 自己按 Esc；没发出去就什么也不做
-            if (SendEscapeToNx()) {
-                ShowWindow(hwnd_, SW_HIDE);
-            }
-            break;
-        case 1:   // 复位：新对象重新贴到点击位置
+        case 0:   // 复位：回到上次自动出现的位置，并恢复"新对象贴点击位置"
             autoPlace_ = true;
-            PlaceAtCursor();
+            if (autoX_ != INT_MIN && autoY_ != INT_MIN) {
+                anchorX_ = autoX_;
+                anchorY_ = autoY_;
+            } else {
+                PlaceAtCursor();
+            }
+            lastX_ = INT_MIN;
+            lastY_ = INT_MIN;
             Reposition();
             SaveLayout();
             break;
-        case 2:   // 关闭：隐藏到下一个对象
+        case 1:   // 关闭：隐藏到下一个对象
             dismissed_ = true;
             ShowWindow(hwnd_, SW_HIDE);
             break;
