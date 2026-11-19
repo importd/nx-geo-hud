@@ -14,6 +14,7 @@
 #include "OverlayPlacement.h"
 #include "OverlayState.h"
 #include "QueryScheduler.h"
+#include "SelectionDiff.h"
 #include "SnapshotChannel.h"
 #include "SnapshotCodec.h"
 #include "TypeNameMap.h"
@@ -398,6 +399,16 @@ static void TestViewModelMessageReplacesRows() {
     CHECK_EQ(vm.Rows()[0].value, std::string("面"));
 }
 
+static void TestNewestSelected() {
+    const std::vector<unsigned> empty;
+    CHECK_EQ(NewestSelected(empty, { 1u, 2u }), 2u);          // 新增两个，最后一个是新的
+    CHECK_EQ(NewestSelected({ 1u }, { 1u, 2u }), 2u);         // 追加一个
+    CHECK_EQ(NewestSelected({ 1u, 2u }, { 1u, 2u }), 2u);     // 没变化，退回末尾
+    CHECK_EQ(NewestSelected({ 1u, 2u }, { 1u }), 1u);         // 取消掉一个
+    CHECK_EQ(NewestSelected({ 2u }, { 1u, 2u }), 1u);         // 新加 1
+    CHECK_EQ(NewestSelected({ 1u }, empty), 0u);              // 清空
+}
+
 int main() {
     TestConst();
     TestSnapshotRoundTrip();
@@ -418,6 +429,7 @@ int main() {
     TestPlacementWhenPanelIsWiderThanWindow();
     TestPointInRect();
     TestOverlayStateDecisions();
+    TestNewestSelected();
 
     std::cout << (Check::Failures() == 0 ? "ALL PASS" : "FAILED") << "\n";
     return Check::Failures() == 0 ? 0 : 1;

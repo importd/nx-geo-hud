@@ -35,6 +35,7 @@
   <ItemGroup>
     <ClCompile Include="NxGeo.Core.cpp" />
     <ClCompile Include="QueryScheduler.cpp" />
+    <ClCompile Include="SelectionDiff.cpp" />
     <ClCompile Include="SnapshotChannel.cpp" />
     <ClCompile Include="SnapshotCodec.cpp" />
     <ClCompile Include="TypeNameMap.cpp" />
@@ -48,6 +49,7 @@
     <ClInclude Include="ObjKind.h" />
     <ClInclude Include="ObjRef.h" />
     <ClInclude Include="QueryScheduler.h" />
+    <ClInclude Include="SelectionDiff.h" />
     <ClInclude Include="SnapshotChannel.h" />
     <ClInclude Include="SnapshotCodec.h" />
     <ClInclude Include="TypeNameMap.h" />

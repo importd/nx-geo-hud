@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <vector>
 
 #include "ICaptureSource.h"
 
@@ -16,4 +17,5 @@ public:
 private:
     std::function<void(const ObjRef&)> sink_;
     unsigned                           lastTag_ = 0xFFFFFFFFu;
+    std::vector<unsigned>              previous_;
 };
