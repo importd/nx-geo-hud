@@ -72,6 +72,7 @@ private:
     // 画面缓存：内容或尺寸没变就直接贴位图，拖动时不再逐帧重绘
     HBITMAP          cache_ = nullptr;
     HDC              cacheDc_ = nullptr;
+    HGDIOBJ          cacheOldBitmap_ = nullptr;
     int              cacheW_ = 0;
     int              cacheH_ = 0;
     int              cacheRevision_ = -1;

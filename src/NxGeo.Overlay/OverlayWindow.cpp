@@ -326,6 +326,10 @@ void OverlayWindow::SaveLayout() {
 
 void OverlayWindow::ReleaseCache() {
     if (cacheDc_ != nullptr) {
+        if (cacheOldBitmap_ != nullptr) {
+            SelectObject(cacheDc_, cacheOldBitmap_);
+            cacheOldBitmap_ = nullptr;
+        }
         if (cache_ != nullptr) DeleteObject(cache_);
         DeleteDC(cacheDc_);
         cacheDc_ = nullptr;
@@ -419,9 +423,9 @@ void OverlayWindow::Paint(HDC target) {
             paintedRevision_ = revision;
             return;
         }
-        const HGDIOBJ oldBitmap = SelectObject(cacheDc_, cache_);
+        // 位图必须一直选在 cacheDc_ 里，否则后面 BitBlt 读到的是 1x1 默认位图（全黑）
+        cacheOldBitmap_ = SelectObject(cacheDc_, cache_);
         RenderContent(cacheDc_);
-        SelectObject(cacheDc_, oldBitmap);
 
         cacheW_ = client.right;
         cacheH_ = client.bottom;
