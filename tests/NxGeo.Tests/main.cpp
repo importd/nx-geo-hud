@@ -9,6 +9,7 @@
 #include "ICaptureSource.h"
 #include "INxQuery.h"
 #include "InfoSnapshot.h"
+#include "InfoViewModel.h"
 #include "NxGeoConst.h"
 #include "QueryScheduler.h"
 #include "SnapshotChannel.h"
@@ -205,6 +206,35 @@ static void TestSchedulerEmitsNoneOnEmptySelection() {
     sch.Stop();
 }
 
+static void TestViewModelShowsOnlyFilledFields() {
+    InfoViewModel vm;
+
+    InfoSnapshot s{};
+    s.kind = static_cast<unsigned short>(ObjKind::Face);
+    s.tag = 0x2A;
+    std::strncpy(s.typeName, "面", sizeof s.typeName - 1);
+    s.fields = Field_L0;
+
+    vm.Apply(s);
+    int visible = 0;
+    for (const auto& row : vm.Rows()) {
+        if (row.visible) ++visible;
+    }
+    CHECK_EQ(visible, 3);   // 类型 / tag / 颜色
+
+    s.fields |= Field_Area;
+    s.area = 12.5;
+    vm.Apply(s);
+
+    const InfoRow& areaRow = vm.Rows()[5];
+    CHECK(areaRow.visible);
+    CHECK_EQ(areaRow.value, std::string("12.500"));
+
+    const int revision = vm.Revision();
+    vm.Apply(s);   // 完全相同，不应该产生新版本
+    CHECK_EQ(vm.Revision(), revision);
+}
+
 int main() {
     TestConst();
     TestSnapshotRoundTrip();
@@ -214,6 +244,7 @@ int main() {
     TestChannelRejectsVersionMismatch();
     TestSchedulerDedupesAndDropsStale();
     TestSchedulerEmitsNoneOnEmptySelection();
+    TestViewModelShowsOnlyFilledFields();
 
     std::cout << (Check::Failures() == 0 ? "ALL PASS" : "FAILED") << "\n";
     return Check::Failures() == 0 ? 0 : 1;
