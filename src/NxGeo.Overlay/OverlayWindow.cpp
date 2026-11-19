@@ -1,4 +1,4 @@
-#include "OverlayWindow.h"
+﻿#include "OverlayWindow.h"
 
 #include <string>
 
@@ -182,29 +182,40 @@ void OverlayWindow::Tick() {
     Reposition();
 }
 
-bool OverlayWindow::ShouldStayVisible() {
-    // 插件在 NX 启动早期就可能拉起浮窗，那时主窗还不存在：每次重新找一遍
-    if ((!nxHwnd_ || !IsWindow(nxHwnd_)) && nxPid_ != 0) {
-        nxHwnd_ = FindMainWindowForPid(nxPid_);
+HWND OverlayWindow::NxWindow() {
+    if (nxHwnd_ != nullptr && IsWindow(nxHwnd_)) {
+        DWORD pid = 0;
+        GetWindowThreadProcessId(nxHwnd_, &pid);
+        if (pid == nxPid_) return nxHwnd_;
     }
-    if (!nxHwnd_ || !IsWindow(nxHwnd_)) return false;
+    nxHwnd_ = FindMainWindowForPid(nxPid_);
+    return nxHwnd_;
+}
 
-    HWND foreground = GetAncestor(GetForegroundWindow(), GA_ROOT);
-    if (foreground != GetAncestor(nxHwnd_, GA_ROOT)) return false;
+bool OverlayWindow::ShouldStayVisible() {
+    const HWND nx = NxWindow();
+    if (nx == nullptr) return false;
+
+    // 前台是不是 NX：按进程 ID 判断。插件启动时 GetForegroundWindow 可能拿到启动画面，
+    // 用窗口指针比较会永远失配。
+    DWORD foregroundPid = 0;
+    GetWindowThreadProcessId(GetForegroundWindow(), &foregroundPid);
+    if (foregroundPid != nxPid_) return false;
 
     POINT cursor{};
     GetCursorPos(&cursor);
 
     RECT nxRect{};
-    GetWindowRect(nxHwnd_, &nxRect);
+    GetWindowRect(nx, &nxRect);
     return PointInRect(cursor.x, cursor.y, nxRect.left, nxRect.top, nxRect.right, nxRect.bottom);
 }
 
 void OverlayWindow::Reposition() {
-    if (!nxHwnd_ || !IsWindow(nxHwnd_)) return;
+    const HWND nx = NxWindow();
+    if (nx == nullptr) return;
 
     RECT nxRect{};
-    GetWindowRect(nxHwnd_, &nxRect);
+    GetWindowRect(nx, &nxRect);
 
     POINT cursor{};
     GetCursorPos(&cursor);

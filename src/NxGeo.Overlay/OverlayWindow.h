@@ -22,6 +22,7 @@ private:
     void Paint(HDC dc);
     int  ContentHeight() const;
     bool ShouldStayVisible();
+    HWND NxWindow();
 
     HWND             hwnd_ = nullptr;
     HWND             nxHwnd_ = nullptr;
