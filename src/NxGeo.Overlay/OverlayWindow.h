@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <windows.h>
 
@@ -24,6 +24,7 @@ private:
     int  ContentWidth();
     bool ShouldStayVisible();
     HWND NxWindow();
+    void CopyToClipboard();
 
     HWND             hwnd_ = nullptr;
     HWND             nxHwnd_ = nullptr;
@@ -35,6 +36,7 @@ private:
     int              height_ = 120;
     bool             clickThrough_ = true;
     bool             enabled_ = true;
+    bool             pinned_ = false;
     std::string      lastLogged_;
     int              paintedRevision_ = -1;
     int              lastX_ = INT_MIN;

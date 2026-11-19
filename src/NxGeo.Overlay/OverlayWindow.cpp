@@ -82,6 +82,11 @@ LRESULT OverlayWindow::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
             } else if (wp == 2) {
                 enabled_ = !enabled_;   // Ctrl+Alt+G：临时关掉/恢复
                 if (!enabled_) ShowWindow(hwnd_, SW_HIDE);
+            } else if (wp == 3) {
+                CopyToClipboard();      // Ctrl+Alt+C：复制当前信息
+            } else if (wp == 4) {
+                pinned_ = !pinned_;     // Ctrl+Alt+P：钉住/取消钉住
+                if (!pinned_) ShowWindow(hwnd_, SW_HIDE);
             }
             return 0;
         }
@@ -115,9 +120,11 @@ bool OverlayWindow::Create(HINSTANCE instance, unsigned long long nxHwnd, int nx
     if (!hwnd_) return false;
 
     ApplyNoActivateStyles(hwnd_, clickThrough_);
-    ApplyTranslucency(hwnd_, 120);
+    ApplyTranslucency(hwnd_, 100);
     RegisterHotKey(hwnd_, 1, MOD_ALT, VK_OEM_3);                    // Alt+` 切换点穿
     RegisterHotKey(hwnd_, 2, MOD_CONTROL | MOD_ALT, 'G');           // Ctrl+Alt+G 开关浮窗
+    RegisterHotKey(hwnd_, 3, MOD_CONTROL | MOD_ALT, 'C');           // Ctrl+Alt+C 复制
+    RegisterHotKey(hwnd_, 4, MOD_CONTROL | MOD_ALT, 'P');           // Ctrl+Alt+P 钉住
 
     if (nxHwnd_ && IsWindow(nxHwnd_)) {
         SetWindowLongPtrW(hwnd_, GWLP_HWNDPARENT, reinterpret_cast<LONG_PTR>(nxHwnd_));   // owner = NX 主窗
@@ -189,6 +196,31 @@ void OverlayWindow::Tick() {
     Reposition();
 }
 
+void OverlayWindow::CopyToClipboard() {
+    std::string text;
+    for (const auto& row : vm_.Rows()) {
+        if (!row.visible) continue;
+        text += row.title + ": " + row.value + "\r\n";
+    }
+    if (text.empty()) return;
+
+    const std::wstring wide = Utf8ToWide(text);
+    if (!OpenClipboard(hwnd_)) return;
+    EmptyClipboard();
+
+    const size_t bytes = (wide.size() + 1) * sizeof(wchar_t);
+    HGLOBAL memory = GlobalAlloc(GMEM_MOVEABLE, bytes);
+    if (memory != nullptr) {
+        void* dst = GlobalLock(memory);
+        if (dst != nullptr) {
+            std::memcpy(dst, wide.c_str(), bytes);
+            GlobalUnlock(memory);
+            SetClipboardData(CF_UNICODETEXT, memory);
+        }
+    }
+    CloseClipboard();
+}
+
 HWND OverlayWindow::NxWindow() {
     if (nxHwnd_ != nullptr && IsWindow(nxHwnd_)) {
         DWORD pid = 0;
@@ -200,6 +232,8 @@ HWND OverlayWindow::NxWindow() {
 }
 
 bool OverlayWindow::ShouldStayVisible() {
+    if (pinned_) return true;   // 钉住后不受前台/光标影响
+
     const HWND nx = NxWindow();
     if (nx == nullptr) return false;
 

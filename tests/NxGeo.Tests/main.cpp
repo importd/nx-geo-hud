@@ -393,7 +393,7 @@ static void TestViewModelMessageReplacesRows() {
         if (row.visible) ++visible;
     }
     CHECK_EQ(visible, 1);
-    CHECK_EQ(vm.Rows()[11].value, std::string("协议版本不符，请重启 NX"));
+    CHECK_EQ(vm.Rows()[18].value, std::string("协议版本不符，请重启 NX"));
 
     vm.Apply(s);   // 恢复快照后消息行必须消失
     CHECK_EQ(vm.Rows()[1].value, std::string("面"));

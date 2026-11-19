@@ -28,6 +28,14 @@ struct InfoSnapshot {
     double             distance = 0.0;
 
     char               distanceTo[48] = { 0 };
+    char               featureName[48] = { 0 };
+    char               componentName[48] = { 0 };
+    double             radius = 0.0;
+    double             normal[3] = { 0.0, 0.0, 0.0 };
+    double             draftAngle = 0.0;
+    double             surfaceArea = 0.0;
+    double             mass = 0.0;
+
     char               note[64] = { 0 };
 };
 

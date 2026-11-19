@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 enum FieldFlags : unsigned {
     Field_None     = 0,
@@ -7,7 +7,11 @@ enum FieldFlags : unsigned {
     Field_Area     = 4u,    // 面面积 + 周长
     Field_Length   = 8u,    // 边/曲线长度
     Field_Volume   = 16u,   // 体体积（L2）
-    Field_Distance = 32u    // 距离（L2）
+    Field_Distance = 32u,   // 距离（L2）
+    Field_Radius   = 64u,   // 圆弧边半径
+    Field_Normal   = 128u,  // 面法向 + 拔模角
+    Field_Surface  = 256u,  // 体表面积
+    Field_Mass     = 512u   // 体质量
 };
 
 inline bool HasField(unsigned fields, unsigned f) { return (fields & f) != 0; }

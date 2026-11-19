@@ -1,13 +1,17 @@
 #include "NxQueryAdapter.h"
 
+#include <cmath>
 #include <cstring>
 #include <exception>
 #include <vector>
 
 #include <uf.h>
+#include <uf_assem.h>
+#include <uf_eval.h>
 #include <uf_modl.h>
 #include <uf_obj.h>
 #include <uf_object_types.h>
+#include <uf_part.h>
 
 #include <NXOpen/DisplayableObject.hxx>
 #include <NXOpen/Edge.hxx>
@@ -163,11 +167,62 @@ InfoSnapshot NxQueryAdapter::QueryL0(const ObjRef& r) {
                                 break;
                         }
                         name = std::string(FaceTypeName(surfType)) + " " + std::to_string(surfType) + extra;
+
+                        // 法向 + 拔模角（相对 +Z，即默认开模方向）
+                        s.normal[0] = dir[0];
+                        s.normal[1] = dir[1];
+                        s.normal[2] = dir[2];
+                        double dz = dir[2];
+                        if (dz > 1.0) dz = 1.0;
+                        if (dz < -1.0) dz = -1.0;
+                        s.draftAngle = 90.0 - std::acos(dz) * 57.29577951308232;
+                        s.fields |= Field_Normal;
+                    }
+
+                    // 生成该面的特征
+                    uf_list_p_t faceFeats = nullptr;
+                    if (UF_MODL_ask_face_feats(t, &faceFeats) == 0 && faceFeats != nullptr) {
+                        int featCount = 0;
+                        if (UF_MODL_ask_list_count(faceFeats, &featCount) == 0 && featCount > 0) {
+                            tag_t feat = NULL_TAG;
+                            if (UF_MODL_ask_list_item(faceFeats, 0, &feat) == 0 && feat != NULL_TAG) {
+                                ReadObjectName(feat, s.featureName, sizeof s.featureName);
+                            }
+                        }
+                        UF_MODL_delete_list(&faceFeats);
                     }
                 } else if (s.kind == static_cast<unsigned short>(ObjKind::Edge)) {
                     int edgeType = 0;
                     if (UF_MODL_ask_edge_type(t, &edgeType) == 0) {
                         name = std::string(EdgeTypeName(edgeType)) + " " + std::to_string(edgeType);
+
+                        // 圆弧边取半径
+                        if (edgeType == 3002) {
+                            UF_EVAL_p_t eval = nullptr;
+                            if (UF_EVAL_initialize(t, &eval) == 0 && eval != nullptr) {
+                                logical isArc = FALSE;
+                                if (UF_EVAL_is_arc(eval, &isArc) == 0 && isArc) {
+                                    UF_EVAL_arc_t arc{};
+                                    if (UF_EVAL_ask_arc(eval, &arc) == 0) {
+                                        s.radius = arc.radius;
+                                        s.fields |= Field_Radius;
+                                    }
+                                }
+                                UF_EVAL_free(eval);
+                            }
+                        }
+                    }
+
+                    uf_list_p_t edgeFeats = nullptr;
+                    if (UF_MODL_ask_edge_feats(t, &edgeFeats) == 0 && edgeFeats != nullptr) {
+                        int featCount = 0;
+                        if (UF_MODL_ask_list_count(edgeFeats, &featCount) == 0 && featCount > 0) {
+                            tag_t feat = NULL_TAG;
+                            if (UF_MODL_ask_list_item(edgeFeats, 0, &feat) == 0 && feat != NULL_TAG) {
+                                ReadObjectName(feat, s.featureName, sizeof s.featureName);
+                            }
+                        }
+                        UF_MODL_delete_list(&edgeFeats);
                     }
                 }
 
@@ -191,6 +246,19 @@ InfoSnapshot NxQueryAdapter::QueryL0(const ObjRef& r) {
         }
 
         s.fields |= Field_L0;
+
+        // 装配上下文里标出这个对象属于哪个零件
+        if (UF_ASSEM_is_occurrence(t0)) {
+            tag_t owningPart = NULL_TAG;
+            char partPath[512] = { 0 };
+            if (UF_OBJ_ask_owning_part(t0, &owningPart) == 0 && owningPart != NULL_TAG &&
+                UF_PART_ask_part_name(owningPart, partPath) == 0) {
+                std::string path(partPath);
+                const size_t slash = path.find_last_of("\\/");
+                if (slash != std::string::npos) path = path.substr(slash + 1);
+                std::strncpy(s.componentName, path.c_str(), sizeof s.componentName - 1);
+            }
+        }
     } catch (const std::exception& e) {
         SetNote(s, e.what());
     } catch (...) {
@@ -267,8 +335,13 @@ void NxQueryAdapter::FillL2(const ObjRef& r, InfoSnapshot& s) {
             double stats[13] = { 0 };
             // type=1 实体, units=4(kg-m) -> 体积单位 m^3，换算成 mm^3
             if (UF_MODL_ask_mass_props_3d(&t, 1, 1, 4, 0.0, 1, accuracy, mp, stats) == 0) {
+                // units=4(kg-m)：体积 m^3、面积 m^2、质量 kg
                 s.volume = mp[1] * 1.0e9;
+                s.surfaceArea = mp[0] * 1.0e6;
+                s.mass = mp[2];
                 s.fields |= Field_Volume;
+                if (s.surfaceArea > 0.0) s.fields |= Field_Surface;
+                if (s.mass > 0.0) s.fields |= Field_Mass;
             }
         }
 

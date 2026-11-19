@@ -33,13 +33,13 @@ std::string Fixed3(double v) {
 }  // namespace
 
 InfoViewModel::InfoViewModel() {
-    rows_.resize(12);
-    const char* titles[12] = {
-        "名称", "类型", "tag", "颜色", "图层", "包围盒", "面积", "周长", "长度", "体积", "距离", "备注"
+    rows_.resize(19);
+    const char* titles[19] = {
+        "名称", "类型", "tag", "颜色", "图层", "包围盒", "面积", "周长", "长度",
+        "半径", "法向", "拔模角", "体积", "表面积", "质量", "距离", "特征", "组件", "备注"
     };
-    for (int i = 0; i < 12; ++i) rows_[i].title = titles[i];
+    for (int i = 0; i < 19; ++i) rows_[i].title = titles[i];
 }
-
 void InfoViewModel::ShowMessage(const std::string& text) {
     std::vector<InfoRow> next = rows_;
     for (auto& row : next) {
@@ -47,8 +47,8 @@ void InfoViewModel::ShowMessage(const std::string& text) {
         row.visible = false;
     }
     if (!next.empty()) {
-        next[11].value = text;
-        next[11].visible = true;
+        next[18].value = text;
+        next[18].visible = true;
     }
 
     bool changed = false;
@@ -63,7 +63,6 @@ void InfoViewModel::ShowMessage(const std::string& text) {
         ++revision_;
     }
 }
-
 void InfoViewModel::Apply(const InfoSnapshot& s) {
     std::vector<InfoRow> next = rows_;
     for (auto& row : next) {
@@ -78,20 +77,26 @@ void InfoViewModel::Apply(const InfoSnapshot& s) {
         }
         next[1].value = s.typeName;
         next[1].visible = true;
-        next[2].value = std::to_string(s.tag);          // 十进制 tag
+        next[2].value = std::to_string(s.tag);
         next[2].visible = true;
         next[3].value = std::to_string(s.color);
         next[3].visible = true;
-        next[4].value = std::to_string(s.layer);        // 图层
+        next[4].value = std::to_string(s.layer);
         next[4].visible = true;
+        if (s.featureName[0] != '\0') {
+            next[16].value = s.featureName;
+            next[16].visible = true;
+        }
+        if (s.componentName[0] != '\0') {
+            next[17].value = s.componentName;
+            next[17].visible = true;
+        }
     }
 
     if (HasField(s.fields, Field_BBox)) {
-        char buf[160];
         const std::string line = Compact(s.bboxMin[0]) + "," + Compact(s.bboxMin[1]) + "," + Compact(s.bboxMin[2]) +
-                             " → " + Compact(s.bboxMax[0]) + "," + Compact(s.bboxMax[1]) + "," + Compact(s.bboxMax[2]);
-        std::snprintf(buf, sizeof buf, "%s", line.c_str());
-        next[5].value = buf;
+                                 " → " + Compact(s.bboxMax[0]) + "," + Compact(s.bboxMax[1]) + "," + Compact(s.bboxMax[2]);
+        next[5].value = line;
         next[5].visible = true;
     }
 
@@ -107,19 +112,44 @@ void InfoViewModel::Apply(const InfoSnapshot& s) {
         next[8].visible = true;
     }
 
-    if (HasField(s.fields, Field_Volume)) {
-        next[9].value = Fixed3(s.volume);
+    if (HasField(s.fields, Field_Radius)) {
+        next[9].value = Fixed3(s.radius);
         next[9].visible = true;
     }
 
-    if (HasField(s.fields, Field_Distance)) {
-        next[10].value = Fixed4(s.distance);
+    if (HasField(s.fields, Field_Normal)) {
+        char buf[64];
+        std::snprintf(buf, sizeof buf, "%.3f,%.3f,%.3f", s.normal[0], s.normal[1], s.normal[2]);
+        next[10].value = buf;
         next[10].visible = true;
+        std::snprintf(buf, sizeof buf, "%.2f°", s.draftAngle);
+        next[11].value = buf;
+        next[11].visible = true;
+    }
+
+    if (HasField(s.fields, Field_Volume)) {
+        next[12].value = Fixed3(s.volume);
+        next[12].visible = true;
+    }
+
+    if (HasField(s.fields, Field_Surface)) {
+        next[13].value = Fixed3(s.surfaceArea);
+        next[13].visible = true;
+    }
+
+    if (HasField(s.fields, Field_Mass)) {
+        next[14].value = Fixed3(s.mass);
+        next[14].visible = true;
+    }
+
+    if (HasField(s.fields, Field_Distance)) {
+        next[15].value = Fixed4(s.distance);
+        next[15].visible = true;
     }
 
     if (s.note[0] != '\0') {
-        next[11].value = s.note;
-        next[11].visible = true;
+        next[18].value = s.note;
+        next[18].visible = true;
     }
 
     bool changed = false;

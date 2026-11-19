@@ -3,7 +3,7 @@
 
 namespace NxGeoConst {
     constexpr unsigned        Magic           = 0x4E584745u;   // "NXGE"
-    constexpr unsigned short  ProtocolVersion = 3;
+    constexpr unsigned short  ProtocolVersion = 4;
     constexpr int             SlotSize        = 512;
     constexpr int             HeaderSize      = 32;
 
