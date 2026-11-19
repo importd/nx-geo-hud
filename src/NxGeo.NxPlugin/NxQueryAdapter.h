@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <string>
 
@@ -14,7 +14,7 @@ public:
     // D3：距离默认量到「上一次选中的对象」
     void SetDistanceTarget(unsigned tag) { distanceTarget_ = tag; }
 
-    static bool SelfTest(std::string& report);
+
 
 private:
     unsigned distanceTarget_ = 0;

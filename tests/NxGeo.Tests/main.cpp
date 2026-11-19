@@ -226,6 +226,24 @@ static void TestSchedulerEmitsNoneOnEmptySelection() {
     sch.Stop();
 }
 
+// 取消选择（空 ref）不应丢掉"上一个对象"，否则用户中间点一下空白，距离就没了
+static void TestSchedulerKeepsDistanceTargetAcrossDeselect() {
+    FakeQuery q;
+    FakeSource src;
+    std::string name = NxGeoConst::SharedMemoryName(9800 + GetCurrentProcessId() % 100);
+    SnapshotChannel ch(name, true);
+    QueryScheduler sch(&src, &q, &ch, [](QueryScheduler::Task) {});
+    sch.Start();
+
+    src.Emit(100);    // 选中 A（体句柄 1100）
+    src.Emit(0);      // 取消选择
+    src.Emit(200);    // 选中 B
+
+    CHECK_EQ(q.distanceTarget, 1100u);   // 仍指向 A 的体
+
+    sch.Stop();
+}
+
 static void TestViewModelShowsOnlyFilledFields() {
     InfoViewModel vm;
 
@@ -384,10 +402,10 @@ static void TestSchedulerTracksPreviousTagAsDistanceTarget() {
 static void TestSchedulerCanRestart() {
     FakeSource src;
     FakeQuery q;
-    std::string name = NxGeoConst::SharedMemoryName(9700 + GetCurrentProcessId() % 200);
+    std::string name = NxGeoConst::SharedMemoryName(9800 + GetCurrentProcessId() % 100);
     SnapshotChannel ch(name, true);
 
-    QueryScheduler sch(&src, &q, &ch);   // 默认工作线程
+    QueryScheduler sch(&src, &q, &ch);   // 走内置工作线程，L2 要真正跑出体积
     sch.Start();
     src.Emit(11);
     bool first = false;
@@ -454,6 +472,7 @@ int main() {
     TestSchedulerKeepsL2AliveAcrossDuplicatePolls();
     TestSchedulerContainsQueryException();
     TestSchedulerTracksPreviousTagAsDistanceTarget();
+    TestSchedulerKeepsDistanceTargetAcrossDeselect();
     TestSchedulerCanRestart();
     TestSchedulerEmitsNoneOnEmptySelection();
     TestViewModelShowsOnlyFilledFields();

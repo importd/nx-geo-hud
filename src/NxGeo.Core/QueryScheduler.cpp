@@ -95,7 +95,7 @@ void QueryScheduler::OnRef(const ObjRef& ref) {
         empty.kind = static_cast<unsigned short>(ObjKind::None);
         WriteSnapshot(empty);
         lastTag_.store(0);
-        lastHandle_ = 0;
+        // 不清 lastHandle_：取消选择后再选新对象，"到上一个对象"仍指向上一次真正选过的那个
         return;
     }
 

@@ -41,3 +41,5 @@ struct InfoSnapshot {
 };
 
 static_assert(sizeof(InfoSnapshot) <= NxGeoConst::SlotSize, "InfoSnapshot exceeds one slot");
+// 精确尺寸：改结构体就必须同时改这里并升 ProtocolVersion，避免两侧布局悄悄不一致
+static_assert(sizeof(InfoSnapshot) == 504, "InfoSnapshot layout changed: bump ProtocolVersion");

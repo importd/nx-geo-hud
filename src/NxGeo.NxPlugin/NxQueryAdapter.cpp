@@ -379,16 +379,3 @@ void NxQueryAdapter::FillL2(const ObjRef& r, InfoSnapshot& s) {
     }
 }
 
-bool NxQueryAdapter::SelfTest(std::string& report) {
-    NXOpen::Part* part = WorkPart();
-    if (!part) {
-        report = "no work part";
-        return false;
-    }
-
-    NXOpen::MeasureManager* mm = part->MeasureManager();
-    const bool ok = (mm != nullptr) && (FindUnit(part, kLengthUnits) != nullptr);
-    report = std::string("work part ok, measure manager ") + (mm ? "ok" : "null") +
-             ", millimeter " + (FindUnit(part, kLengthUnits) ? "ok" : "missing");
-    return ok;
-}

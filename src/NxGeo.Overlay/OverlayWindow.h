@@ -56,6 +56,7 @@ private:
     unsigned         lastTag_ = 0;
     bool             dragging_ = false;
     bool             dragMoved_ = false;
+    DWORD            suppressUntil_ = 0;   // 点了取消选择后短暂压制，避免闪
     POINT            dragStartCursor_{};
     RECT             dragStartRect_{};
 
