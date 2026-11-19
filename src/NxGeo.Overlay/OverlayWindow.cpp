@@ -342,9 +342,9 @@ HWND OverlayWindow::NxWindow() {
     return nxHwnd_;
 }
 
+// 只看「NX 还在不在」：切到别的窗口不再隐藏面板（否则一圈操作回来就找不到了），
+// 只有 NX 最小化/关闭时才隐藏。
 bool OverlayWindow::ShouldStayVisible() {
-    if (dragging_) return true;      // 拖动时不要因为光标跑出 NX 就藏起来
-
     const HWND nx = NxWindow();
     if (nx == nullptr) {
         if (lastStay_) NxGeoLog::Write("stay: no NX window");
@@ -352,23 +352,12 @@ bool OverlayWindow::ShouldStayVisible() {
         return false;
     }
 
-    DWORD foregroundPid = 0;
-    GetWindowThreadProcessId(GetForegroundWindow(), &foregroundPid);
-
-    RECT nxRect{};
-    GetWindowRect(nx, &nxRect);
-    POINT cursor{};
-    GetCursorPos(&cursor);
-    const bool inside = PointInRect(cursor.x, cursor.y, nxRect.left, nxRect.top, nxRect.right, nxRect.bottom);
-    const bool foreground = (foregroundPid == nxPid_);
-    const bool stay = foreground && inside;
-
-    if (stay != lastStay_) {   // 只在翻转时留痕，避免刷屏
+    const bool stay = (IsWindowVisible(nx) != FALSE) && (IsIconic(nx) == FALSE);
+    if (stay != lastStay_) {
         lastStay_ = stay;
         NxGeoLog::Write(std::string("stay: ") + (stay ? "1" : "0") +
-                        " foregroundPid=" + std::to_string(foregroundPid) +
-                        " nxPid=" + std::to_string(nxPid_) +
-                        " cursorInside=" + (inside ? "1" : "0"));
+                        " nxVisible=" + (IsWindowVisible(nx) ? "1" : "0") +
+                        " minimized=" + (IsIconic(nx) ? "1" : "0"));
     }
     return stay;
 }
