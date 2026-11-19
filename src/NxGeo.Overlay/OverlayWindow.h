@@ -28,6 +28,7 @@ private:
     void Paint(HDC dc);
     void RenderContent(HDC dc);
     void ShowNotice();
+    static int RowsForKind(unsigned kind);
     void ReleaseCache();
     void DrawToolbar(HDC dc);
     int  ToolbarStartX() const;

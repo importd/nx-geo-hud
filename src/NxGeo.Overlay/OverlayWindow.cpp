@@ -25,8 +25,8 @@ constexpr int kButton = 16;
 constexpr int kButtonGap = 2;
 constexpr int kButtonCount = 2;          // 复位 / 关闭
 // 固定窗口尺寸：不做内容自适应，避免内容分 L0/L1/L2 三步到达时窗口「一点点长大」
-constexpr int kPanelWidth = 380;
-constexpr int kPanelHeight = 20 + 6 * 2 + 12 * 21;  // 工具条 + 上边距 + 最多 12 行
+constexpr int kPanelWidth = 320;
+
 constexpr wchar_t kClassName[] = L"NxGeoOverlayWindow";
 constexpr BYTE kAlpha = 170;
 
@@ -114,6 +114,17 @@ bool OverlayWindow::Create(HINSTANCE instance, unsigned long long nxHwnd, int nx
     NxGeoLog::Write("overlay created: nxpid=" + std::to_string(nxPid_) +
                     " channel=" + (channel_->IsValid() ? "ok" : "MISSING"));
     return true;
+}
+
+// 每类对象高度固定：面 12 行、体 11 行、边 10 行。
+// 这样 L0→L1→L2 三步到达时窗口不会一点点长高，而不同对象之间高度仍然不同。
+int OverlayWindow::RowsForKind(unsigned kind) {
+    switch (kind) {
+        case 1:  return 11;   // 体 / 有体的特征
+        case 2:  return 12;   // 面
+        case 3:  return 10;   // 边
+        default: return 6;    // 其它（无几何特征、曲线）
+    }
 }
 
 void OverlayWindow::ShowNotice() {
@@ -252,9 +263,11 @@ void OverlayWindow::Tick() {
     hideSince_ = 0;
 
     // 固定尺寸：只有从「启动提示」切回信息面板时才需要改一次
-    if (width_ != kPanelWidth || height_ != kPanelHeight) {
-        width_ = kPanelWidth;
-        height_ = kPanelHeight;
+    const int wantedWidth = kPanelWidth;
+    const int wantedHeight = kToolbarHeight + kPadding * 2 + RowsForKind(snapshot.kind) * kRowHeight;
+    if (width_ != wantedWidth || height_ != wantedHeight) {
+        width_ = wantedWidth;
+        height_ = wantedHeight;
         SetWindowPos(hwnd_, HWND_TOPMOST, 0, 0, width_, height_,
                      SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
         lastX_ = INT_MIN;
@@ -656,10 +669,12 @@ int OverlayWindow::Run() {
             DispatchMessageW(&msg);
         }
 
-        if (wakeEvent_) {
-            WaitForSingleObject(wakeEvent_, 100);   // 有事件立刻醒，没事件 100ms 兜底
+        // 关键：等待时把窗口输入也算进来，否则拖动时鼠标消息会攒到 100ms 才被处理（看起来掉帧）
+        if (wakeEvent_ != nullptr) {
+            HANDLE handles[1] = { wakeEvent_ };
+            MsgWaitForMultipleObjectsEx(1, handles, 100, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
         } else {
-            Sleep(16);
+            MsgWaitForMultipleObjectsEx(0, nullptr, 100, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
         }
         Tick();
     }
