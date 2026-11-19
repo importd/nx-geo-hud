@@ -1,4 +1,4 @@
-#include "NxQueryAdapter.h"
+﻿#include "NxQueryAdapter.h"
 
 #include <cmath>
 #include <cstring>
@@ -364,7 +364,7 @@ void NxQueryAdapter::FillL2(const ObjRef& r, InfoSnapshot& s) {
                                            &minDist, pt1, pt2, &accuracy) == 0) {
                 s.distance = minDist;
                 s.fields |= Field_Distance;
-                std::strncpy(s.distanceTo, "上一个选中对象", sizeof s.distanceTo - 1);
+                std::strncpy(s.distanceTo, "到上一个对象", sizeof s.distanceTo - 1);
             }
         }
     } catch (const std::exception& e) {

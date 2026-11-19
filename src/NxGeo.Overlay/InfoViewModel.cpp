@@ -159,7 +159,13 @@ void InfoViewModel::Apply(const InfoSnapshot& s) {
     }
 
     if (HasField(s.fields, Field_Distance)) {
-        next[15].value = WithUnit(s.distance, "mm", 4);
+        std::string distanceText = WithUnit(s.distance, "mm", 4);
+        if (s.distanceTo[0] != '\0') {
+            distanceText += "（";
+            distanceText += s.distanceTo;
+            distanceText += "）";
+        }
+        next[15].value = distanceText;
         next[15].visible = true;
     }
 
