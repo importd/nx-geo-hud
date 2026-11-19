@@ -16,6 +16,10 @@ namespace {
 constexpr int kRowHeight = 18;
 constexpr int kPadding = 6;
 constexpr int kTitleWidth = 64;
+constexpr int kToolbarHeight = 20;
+constexpr int kButton = 16;
+constexpr int kButtonGap = 2;
+constexpr int kButtonCount = 5;
 constexpr wchar_t kClassName[] = L"NxGeoOverlayWindow";
 constexpr UINT WM_TRAYICON = WM_APP + 1;
 
@@ -209,6 +213,119 @@ bool OverlayWindow::Create(HINSTANCE instance, unsigned long long nxHwnd, int nx
     return true;
 }
 
+void OverlayWindow::TogglePin() {
+    if (g_frozenWindow != nullptr) {
+        g_frozenWindow->Close();
+        g_frozenWindow = nullptr;
+        pinned_ = false;
+        return;
+    }
+
+    g_frozenWindow = new OverlayWindow();
+    if (!g_frozenWindow->CreateFrozen(GetModuleHandleW(nullptr), lastX_, lastY_, lastSnapshot_)) {
+        delete g_frozenWindow;
+        g_frozenWindow = nullptr;
+        return;
+    }
+    pinned_ = true;
+}
+
+void OverlayWindow::DrawToolbar(HDC dc) {
+    RECT bar{ 0, 0, width_, kToolbarHeight };
+    HBRUSH barBrush = CreateSolidBrush(RGB(18, 18, 20));
+    FillRect(dc, &bar, barBrush);
+    DeleteObject(barBrush);
+
+    const int startX = ToolbarStartX();
+    HPEN pen = CreatePen(PS_SOLID, 1, RGB(210, 210, 210));
+    HGDIOBJ oldPen = SelectObject(dc, pen);
+    HGDIOBJ oldBrush = SelectObject(dc, GetStockObject(NULL_BRUSH));
+    const int y = (kToolbarHeight - kButton) / 2;
+
+    for (int i = 0; i < kButtonCount; ++i) {
+        const int x = startX + i * (kButton + kButtonGap);
+        switch (i) {
+            case 0:   // 取消选择：一个圈加斜杠
+                Ellipse(dc, x + 3, y + 3, x + 13, y + 13);
+                MoveToEx(dc, x + 5, y + 5, nullptr);
+                LineTo(dc, x + 11, y + 11);
+                break;
+            case 1:   // 移动：四向箭头
+                MoveToEx(dc, x + 2, y + 8, nullptr);  LineTo(dc, x + 14, y + 8);
+                MoveToEx(dc, x + 8, y + 2, nullptr);  LineTo(dc, x + 8, y + 14);
+                MoveToEx(dc, x + 5, y + 5, nullptr);  LineTo(dc, x + 2, y + 8);  LineTo(dc, x + 5, y + 11);
+                MoveToEx(dc, x + 11, y + 5, nullptr); LineTo(dc, x + 14, y + 8); LineTo(dc, x + 11, y + 11);
+                break;
+            case 2:   // 钉住：图钉
+                MoveToEx(dc, x + 4, y + 4, nullptr);  LineTo(dc, x + 12, y + 4);
+                MoveToEx(dc, x + 8, y + 4, nullptr);  LineTo(dc, x + 8, y + 12);
+                MoveToEx(dc, x + 5, y + 12, nullptr); LineTo(dc, x + 11, y + 12);
+                break;
+            case 3: { // 关闭：红叉
+                HPEN red = CreatePen(PS_SOLID, 2, RGB(230, 90, 80));
+                HGDIOBJ previous = SelectObject(dc, red);
+                MoveToEx(dc, x + 4, y + 4, nullptr);  LineTo(dc, x + 12, y + 12);
+                MoveToEx(dc, x + 12, y + 4, nullptr); LineTo(dc, x + 4, y + 12);
+                SelectObject(dc, previous);
+                DeleteObject(red);
+                break;
+            }
+            case 4:   // 复制：两个叠放方块
+                Rectangle(dc, x + 2, y + 2, x + 10, y + 10);
+                Rectangle(dc, x + 6, y + 6, x + 14, y + 14);
+                break;
+            default:
+                break;
+        }
+    }
+
+    SelectObject(dc, oldBrush);
+    SelectObject(dc, oldPen);
+    DeleteObject(pen);
+}
+
+int OverlayWindow::ToolbarStartX() const {
+    return width_ - kPadding - kButtonCount * (kButton + kButtonGap) + kButtonGap;
+}
+
+int OverlayWindow::ToolbarHit(int x, int y) const {
+    if (y < 0 || y > kToolbarHeight) return -1;
+    const int startX = ToolbarStartX();
+    for (int i = 0; i < kButtonCount; ++i) {
+        const int bx = startX + i * (kButton + kButtonGap);
+        if (x >= bx && x <= bx + kButton) return i;
+    }
+    return -1;
+}
+
+void OverlayWindow::PerformToolbarAction(int index) {
+    switch (index) {
+        case 0:   // 取消选择：隐藏并压制当前对象，直到选中新的
+            suppressed_ = true;
+            suppressTag_ = lastTag_;
+            ShowWindow(hwnd_, SW_HIDE);
+            break;
+        case 1:   // 移动：进入拖动
+            dragging_ = true;
+            autoPlace_ = false;
+            GetCursorPos(&dragStartCursor_);
+            GetWindowRect(hwnd_, &dragStartRect_);
+            SetCapture(hwnd_);
+            break;
+        case 2:   // 钉住
+            TogglePin();
+            break;
+        case 3:   // 关闭
+            enabled_ = false;
+            ShowWindow(hwnd_, SW_HIDE);
+            break;
+        case 4:   // 复制
+            CopyToClipboard();
+            break;
+        default:
+            break;
+    }
+}
 bool OverlayWindow::CreateFrozen(HINSTANCE instance, int x, int y, const InfoSnapshot& snapshot) {
     frozen_ = true;
     frozenSnapshot_ = snapshot;
@@ -618,7 +735,7 @@ int OverlayWindow::ContentHeight() const {    int rows = 0;
     for (const auto& row : vm_.Rows()) {
         if (row.visible) ++rows;
     }
-    return kPadding * 2 + rows * kRowHeight;
+    return kToolbarHeight + kPadding * 2 + rows * kRowHeight;
 }
 
 void OverlayWindow::Paint(HDC target) {
@@ -633,6 +750,8 @@ void OverlayWindow::Paint(HDC target) {
     const HBRUSH background = CreateSolidBrush(RGB(28, 28, 30));
     FillRect(dc, &client, background);
     DeleteObject(background);
+
+    DrawToolbar(dc);
 
     // 钉住的冻结面板用暖色边框区分（否则两个面板长得一样分不清谁是谁）
     if (frozen_) {
@@ -651,7 +770,7 @@ void OverlayWindow::Paint(HDC target) {
     HGDIOBJ oldFont = SelectObject(dc, font);
     SetBkMode(dc, TRANSPARENT);
 
-    int y = kPadding;
+    int y = kToolbarHeight + kPadding;
     for (const auto& row : vm_.Rows()) {
         if (!row.visible) continue;
 
