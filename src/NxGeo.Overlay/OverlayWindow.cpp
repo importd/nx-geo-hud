@@ -1,4 +1,4 @@
-﻿#include "OverlayWindow.h"
+#include "OverlayWindow.h"
 
 #include <cstdlib>
 #include <fstream>
@@ -445,6 +445,13 @@ void OverlayWindow::Reposition() {
 
     POINT cursor{};
     GetCursorPos(&cursor);
+
+    // 鼠标已经移到面板上时就别再跟着跑，否则右键永远落不到面板里
+    RECT self{};
+    if (GetWindowRect(hwnd_, &self) &&
+        PointInRect(cursor.x, cursor.y, self.left, self.top, self.right, self.bottom)) {
+        return;
+    }
 
     const Placement p = ComputePlacement(cursor.x, cursor.y, width_, height_,
                                          nxRect.left, nxRect.top, nxRect.right, nxRect.bottom);
