@@ -1,6 +1,16 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$msbuild = 'C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\MSBuild\Current\Bin\MSBuild.exe'
+$msbuild = $null
+$vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+if (Test-Path $vswhere) {
+    $found = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' 2>$null
+    if ($found) { $msbuild = ($found | Select-Object -First 1) }
+}
+if (-not $msbuild) {
+    # fallback: known VS2019 Community location
+    $msbuild = 'C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\MSBuild\Current\Bin\MSBuild.exe'
+}
+if (-not (Test-Path $msbuild)) { Write-Host "MSBuild not found; pass -MsBuild <path>"; exit 1 }
 
 # Use a workspace-local temp dir: the system %TEMP% can lose its sandbox ACLs,
 # and then cl.exe cannot create its temporary files.
