@@ -26,7 +26,8 @@ private:
     void Tick();
     void Reposition();
     void Paint(HDC dc);
-    void RenderContent(HDC dc);
+    void RenderContent(HDC dc, int width, int height);
+    void EnsureCache(int width, int height, int revision);
     void ShowNotice();
     static int RowsForKind(unsigned kind);
     void ReleaseCache();

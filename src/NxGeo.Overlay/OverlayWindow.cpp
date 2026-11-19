@@ -285,8 +285,11 @@ void OverlayWindow::Tick() {
                                  (wantedWidth != appliedW_) || (wantedHeight != appliedH_);
 
     if (geometryChanged) {
+        // 关键顺序：先接受新尺寸（工具条定位依赖 width_）→ 按新尺寸渲染 → 再改窗口尺寸，
+        // 否则扩张出来的那一帧是空白，看起来就是闪一下
         width_ = wantedWidth;
         height_ = wantedHeight;
+        EnsureCache(wantedWidth, wantedHeight, vm_.Revision());
         lastX_ = x;
         lastY_ = y;
         appliedW_ = wantedWidth;
@@ -371,9 +374,8 @@ void OverlayWindow::ReleaseCache() {
 }
 
 // 真正画内容：只在内容/尺寸变化时跑
-void OverlayWindow::RenderContent(HDC dc) {
-    RECT client{};
-    GetClientRect(hwnd_, &client);
+void OverlayWindow::RenderContent(HDC dc, int width, int height) {
+    RECT client{ 0, 0, width, height };
 
     HBRUSH background = CreateSolidBrush(RGB(28, 28, 30));
     FillRect(dc, &client, background);
@@ -432,37 +434,45 @@ void OverlayWindow::RenderContent(HDC dc) {
     DeleteObject(font);
 }
 
-// 拖动时窗口会被系统反复要求重绘：缓存命中就只贴位图，避免逐帧建字体+画文字
+// 按指定尺寸把画面渲染到位图里（可以在改窗口尺寸之前先调用）
+void OverlayWindow::EnsureCache(int width, int height, int revision) {
+    if (cache_ != nullptr && cacheW_ == width && cacheH_ == height && cacheRevision_ == revision) return;
+
+    ReleaseCache();
+    if (width <= 0 || height <= 0) return;
+
+    HDC screen = GetDC(hwnd_);
+    if (screen == nullptr) return;
+    cacheDc_ = CreateCompatibleDC(screen);
+    cache_ = CreateCompatibleBitmap(screen, width, height);
+    ReleaseDC(hwnd_, screen);
+
+    if (cacheDc_ == nullptr || cache_ == nullptr) {
+        ReleaseCache();
+        return;
+    }
+
+    // 位图必须一直选在 cacheDc_ 里，否则 BitBlt 读到的是 1x1 默认位图（全黑）
+    cacheOldBitmap_ = SelectObject(cacheDc_, cache_);
+    RenderContent(cacheDc_, width, height);
+    cacheW_ = width;
+    cacheH_ = height;
+    cacheRevision_ = revision;
+}
+
 void OverlayWindow::Paint(HDC target) {
     RECT client{};
     GetClientRect(hwnd_, &client);
     if (client.right <= 0 || client.bottom <= 0) return;
 
     const int revision = vm_.Revision();
-    const bool cacheValid = (cache_ != nullptr) && (cacheW_ == client.right) &&
-                            (cacheH_ == client.bottom) && (cacheRevision_ == revision);
+    EnsureCache(client.right, client.bottom, revision);
 
-    if (!cacheValid) {
-        ReleaseCache();
-
-        cacheDc_ = CreateCompatibleDC(target);
-        cache_ = CreateCompatibleBitmap(target, client.right, client.bottom);
-        if (cacheDc_ == nullptr || cache_ == nullptr) {
-            ReleaseCache();
-            RenderContent(target);   // 回退：直接画，别留一块空底
-            paintedRevision_ = revision;
-            return;
-        }
-        // 位图必须一直选在 cacheDc_ 里，否则后面 BitBlt 读到的是 1x1 默认位图（全黑）
-        cacheOldBitmap_ = SelectObject(cacheDc_, cache_);
-        RenderContent(cacheDc_);
-
-        cacheW_ = client.right;
-        cacheH_ = client.bottom;
-        cacheRevision_ = revision;
+    if (cacheDc_ != nullptr) {
+        BitBlt(target, 0, 0, client.right, client.bottom, cacheDc_, 0, 0, SRCCOPY);
+    } else {
+        RenderContent(target, client.right, client.bottom);   // 缓存建不出来就直接画
     }
-
-    BitBlt(target, 0, 0, client.right, client.bottom, cacheDc_, 0, 0, SRCCOPY);
     paintedRevision_ = revision;
 }
 
