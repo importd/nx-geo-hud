@@ -30,6 +30,7 @@ private:
     void EnsureCache(int width, int height, int revision);
     void ShowNotice();
     static int RowsForKind(unsigned kind);
+    void SetVisible(bool show, const char* reason);
     void ReleaseCache();
     void DrawToolbar(HDC dc);
     int  ToolbarStartX() const;
@@ -72,6 +73,8 @@ private:
     int              lastY_ = INT_MIN;
     int              paintedRevision_ = -1;
     DWORD            hideSince_ = 0;         // 连续不可见计时，避免点击瞬间闪一下
+    bool             visibleState_ = false;
+    bool             lastStay_ = true;
     bool             noticeActive_ = false;  // 启动提示：显示几秒
     DWORD            noticeUntil_ = 0;
     bool             showingNotice_ = false;

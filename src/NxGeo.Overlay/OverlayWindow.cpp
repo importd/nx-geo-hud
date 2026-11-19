@@ -118,6 +118,14 @@ bool OverlayWindow::Create(HINSTANCE instance, unsigned long long nxHwnd, int nx
 
 // 每类对象高度固定：面 12 行、体 11 行、边 10 行。
 // 这样 L0→L1→L2 三步到达时窗口不会一点点长高，而不同对象之间高度仍然不同。
+// 所有显示/隐藏都走这里，状态变化才写日志（便于定位"闪"到底是谁触发的）
+void OverlayWindow::SetVisible(bool show, const char* reason) {
+    if (visibleState_ == show) return;
+    visibleState_ = show;
+    NxGeoLog::Write(std::string("vis: ") + (show ? "SHOW" : "HIDE") + " (" + reason + ")");
+    ShowWindow(hwnd_, show ? SW_SHOWNOACTIVATE : SW_HIDE);
+}
+
 int OverlayWindow::RowsForKind(unsigned kind) {
     switch (kind) {
         case 1:  return 11;   // 体 / 有体的特征
@@ -231,13 +239,23 @@ void OverlayWindow::Tick() {
         }
     }
 
-    // 关键：NX 点击新对象时会先清空选择、再选中，中间会出现一个「空快照」。
-    // 立刻隐藏就会看到面板整块闪一下，所以空状态也给宽限期。
-    const bool wantVisible = (state != OverlayState::Hide) && ShouldStayVisible();
-    if (!wantVisible) {
+    // 「空快照」不再隐藏面板：NX 点击新对象时会先清空选择再选中，中间的空状态
+    // 曾经让面板整块闪一下。现在保持上一个对象的内容，直到换对象或用户关闭。
+    if (state == OverlayState::Hide) {
+        if (!ShouldStayVisible()) {
+            if (hideSince_ == 0) hideSince_ = GetTickCount();
+            if (GetTickCount() - hideSince_ < 300) return;
+            SetVisible(false, "nx-not-focused");
+            return;
+        }
+        hideSince_ = 0;
+        return;
+    }
+
+    if (!ShouldStayVisible()) {
         if (hideSince_ == 0) hideSince_ = GetTickCount();
-        if (GetTickCount() - hideSince_ < 300) return;   // 宽限期内保持现状
-        ShowWindow(hwnd_, SW_HIDE);
+        if (GetTickCount() - hideSince_ < 300) return;
+        SetVisible(false, "nx-not-focused");
         return;
     }
     hideSince_ = 0;
@@ -255,7 +273,7 @@ void OverlayWindow::Tick() {
                 if (autoPlace_) PlaceAtCursor();
             }
             if (dismissed_) {
-                ShowWindow(hwnd_, SW_HIDE);
+                SetVisible(false, "dismissed");
                 return;
             }
             vm_.Apply(snapshot);
@@ -297,12 +315,15 @@ void OverlayWindow::Tick() {
         appliedW_ = wantedWidth;
         appliedH_ = wantedHeight;
         cacheRevision_ = -1;   // 尺寸变了，缓存作废
+        NxGeoLog::Write("geom: tag=" + std::to_string(snapshot.tag) +
+                        " pos=" + std::to_string(x) + "," + std::to_string(y) +
+                        " size=" + std::to_string(wantedWidth) + "x" + std::to_string(wantedHeight));
         SetWindowPos(hwnd_, HWND_TOPMOST, x, y, wantedWidth, wantedHeight,
                      SWP_NOACTIVATE | SWP_NOOWNERZORDER);
     }
 
     if (!wasVisible) {
-        ShowWindow(hwnd_, SW_SHOWNOACTIVATE);
+        SetVisible(true, "snapshot");
         InvalidateRect(hwnd_, nullptr, FALSE);
         UpdateWindow(hwnd_);
     } else if (geometryChanged || vm_.Revision() != paintedRevision_) {
@@ -325,17 +346,31 @@ bool OverlayWindow::ShouldStayVisible() {
     if (dragging_) return true;      // 拖动时不要因为光标跑出 NX 就藏起来
 
     const HWND nx = NxWindow();
-    if (nx == nullptr) return false;
+    if (nx == nullptr) {
+        if (lastStay_) NxGeoLog::Write("stay: no NX window");
+        lastStay_ = false;
+        return false;
+    }
 
     DWORD foregroundPid = 0;
     GetWindowThreadProcessId(GetForegroundWindow(), &foregroundPid);
-    if (foregroundPid != nxPid_) return false;
 
     RECT nxRect{};
     GetWindowRect(nx, &nxRect);
     POINT cursor{};
     GetCursorPos(&cursor);
-    return PointInRect(cursor.x, cursor.y, nxRect.left, nxRect.top, nxRect.right, nxRect.bottom);
+    const bool inside = PointInRect(cursor.x, cursor.y, nxRect.left, nxRect.top, nxRect.right, nxRect.bottom);
+    const bool foreground = (foregroundPid == nxPid_);
+    const bool stay = foreground && inside;
+
+    if (stay != lastStay_) {   // 只在翻转时留痕，避免刷屏
+        lastStay_ = stay;
+        NxGeoLog::Write(std::string("stay: ") + (stay ? "1" : "0") +
+                        " foregroundPid=" + std::to_string(foregroundPid) +
+                        " nxPid=" + std::to_string(nxPid_) +
+                        " cursorInside=" + (inside ? "1" : "0"));
+    }
+    return stay;
 }
 
 // 给 NX 的焦点窗口投递 Esc：NX 自己清空选择与高亮，等价于它的「取消选择」
@@ -602,7 +637,7 @@ LRESULT OverlayWindow::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
             if (wp == 1) {              // Ctrl+Alt+G：总开关
                 enabled_ = !enabled_;
                 if (!enabled_) {
-                    ShowWindow(hwnd_, SW_HIDE);
+                    SetVisible(false, "hotkey");
                 } else {
                     dismissed_ = false;
                 }
