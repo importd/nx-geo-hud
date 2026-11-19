@@ -1,4 +1,4 @@
-#include "OverlayWindow.h"
+﻿#include "OverlayWindow.h"
 
 #include <cstdlib>
 #include <fstream>
@@ -18,6 +18,8 @@ constexpr int kPadding = 6;
 constexpr int kTitleWidth = 64;
 constexpr wchar_t kClassName[] = L"NxGeoOverlayWindow";
 constexpr UINT WM_TRAYICON = WM_APP + 1;
+
+OverlayWindow* g_frozenWindow = nullptr;
 
 // 快捷键默认值（可在 exe 同目录的 nxgeo.ini 里改，写成 "copy=Ctrl+Shift+C"）
 struct HotkeySpec {
@@ -152,6 +154,13 @@ LRESULT OverlayWindow::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
             NxGeoLog::Write("menu: WM_RBUTTONUP received");
             ShowTrayMenu();          // 面板上右键也出同一个菜单
             return 0;
+        case WM_LBUTTONDBLCLK:
+            if (frozen_) {           // 钉住的副本：双击关闭
+                closed_ = true;
+                DestroyWindow(hwnd_);
+                return 0;
+            }
+            return 0;
         case WM_LBUTTONDOWN:
             dragging_ = true;
             autoPlace_ = false;      // 手动挪过之后就别再自动贴光标
@@ -196,8 +205,10 @@ LRESULT OverlayWindow::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         }
         case WM_DESTROY:
-            RemoveTrayIcon();
-            PostQuitMessage(0);
+            if (!frozen_) {
+                RemoveTrayIcon();
+                PostQuitMessage(0);
+            }
             return 0;
         default:
             break;
@@ -258,7 +269,48 @@ bool OverlayWindow::Create(HINSTANCE instance, unsigned long long nxHwnd, int nx
     return true;
 }
 
+bool OverlayWindow::CreateFrozen(HINSTANCE instance, int x, int y, const InfoSnapshot& snapshot) {
+    frozen_ = true;
+    frozenSnapshot_ = snapshot;
+    vm_.Apply(snapshot);
+
+    WNDCLASSEXW wc{};
+    wc.cbSize = sizeof wc;
+    wc.lpfnWndProc = &OverlayWindow::WndProc;
+    wc.hInstance = instance;
+    wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    wc.lpszClassName = kClassName;
+    if (!RegisterClassExW(&wc) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) return false;
+
+    hwnd_ = CreateWindowExW(WS_EX_LAYERED | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
+                            kClassName, L"", WS_POPUP, x, y, 200, 100,
+                            nullptr, nullptr, instance, this);
+    if (hwnd_ == nullptr) return false;
+
+    ApplyNoActivateStyles(hwnd_, false);
+    ApplyTranslucency(hwnd_, 170);
+
+    width_ = ContentWidth();
+    height_ = ContentHeight();
+    SetWindowPos(hwnd_, HWND_TOPMOST, x, y, width_, height_,
+                 SWP_SHOWWINDOW | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+    InvalidateRect(hwnd_, nullptr, FALSE);
+    UpdateWindow(hwnd_);
+
+    NxGeoLog::Write("pinned panel created at " + std::to_string(x) + "," + std::to_string(y));
+    return true;
+}
+
+void OverlayWindow::Close() {
+    closed_ = true;
+    if (hwnd_ != nullptr && IsWindow(hwnd_)) {
+        DestroyWindow(hwnd_);
+    }
+    NxGeoLog::Write("pinned panel closed");
+}
+
 void OverlayWindow::Tick() {
+    if (frozen_) return;                     // 钉住的副本内容固定
     if (!channel_ || !enabled_) return;
 
     InfoSnapshot snapshot{};
@@ -287,6 +339,7 @@ void OverlayWindow::Tick() {
             vm_.ShowMessage("协议版本不符，请重启 NX");
             break;
         case OverlayState::ShowSnapshot:
+            lastSnapshot_ = snapshot;
             // 新对象：面板落到「点它的位置」右下方，之后保持不动（缩放也不跟随）
             if (snapshot.tag != lastTag_) {
                 lastTag_ = snapshot.tag;
@@ -423,8 +476,19 @@ void OverlayWindow::ShowTrayMenu() {
             CopyToClipboard();
             break;
         case kTrayPin:
-            pinned_ = !pinned_;
-            if (!pinned_) ShowWindow(hwnd_, SW_HIDE);
+            if (g_frozenWindow != nullptr) {
+                g_frozenWindow->Close();
+                g_frozenWindow = nullptr;
+                pinned_ = false;
+            } else {
+                g_frozenWindow = new OverlayWindow();
+                if (!g_frozenWindow->CreateFrozen(GetModuleHandleW(nullptr), lastX_, lastY_, lastSnapshot_)) {
+                    delete g_frozenWindow;
+                    g_frozenWindow = nullptr;
+                } else {
+                    pinned_ = true;
+                }
+            }
             break;
         case kTrayClickThrough:
             clickThrough_ = !clickThrough_;
@@ -693,5 +757,13 @@ int OverlayWindow::Run() {
             Sleep(16);
         }
         Tick();
+
+        if (g_frozenWindow != nullptr) {
+            if (g_frozenWindow->IsClosed()) {
+                delete g_frozenWindow;
+                g_frozenWindow = nullptr;
+                pinned_ = false;
+            }
+        }
     }
 }

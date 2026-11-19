@@ -11,6 +11,8 @@
 class OverlayWindow {
 public:
     bool Create(HINSTANCE instance, unsigned long long nxHwnd, int nxPid);
+    // 钉住的副本：内容冻结，不读共享内存，双击关闭
+    bool CreateFrozen(HINSTANCE instance, int x, int y, const InfoSnapshot& snapshot);
     int  Run();
 
 private:
@@ -31,6 +33,8 @@ private:
     void LoadLayout();
     void SaveLayout();
     void ResetToDefaultPosition();
+    void Close();
+    bool IsClosed() const { return closed_; }
 
     HWND             hwnd_ = nullptr;
     HWND             nxHwnd_ = nullptr;
@@ -51,6 +55,10 @@ private:
     int              anchorY_ = INT_MIN;
     bool             autoPlace_ = true;       // 新对象时自动贴到点击位置；手动拖动后不再自动
     unsigned         lastTag_ = 0;
+    bool             frozen_ = false;         // 钉住的副本
+    bool             closed_ = false;
+    InfoSnapshot     frozenSnapshot_{};
+    InfoSnapshot     lastSnapshot_{};
     std::string      lastLogged_;
     int              paintedRevision_ = -1;
     int              lastX_ = INT_MIN;
