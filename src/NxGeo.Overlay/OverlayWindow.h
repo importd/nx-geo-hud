@@ -39,6 +39,7 @@ private:
     int  ToolbarHit(int x, int y) const;
     void PerformToolbarAction(int index);
     void TogglePin();
+    void SendEscapeToNx();
     bool IsClosed() const { return closed_; }
 
     HWND             hwnd_ = nullptr;
