@@ -101,12 +101,54 @@ bool OverlayWindow::Create(HINSTANCE instance, unsigned long long nxHwnd, int nx
 
     LoadLayout();
 
+    noticeActive_ = true;
+    noticeUntil_ = GetTickCount() + 3500;   // 显示 3.5 秒
+
     channel_ = new SnapshotChannel(NxGeoConst::SharedMemoryName(static_cast<int>(nxPid_)), false);
     wakeEvent_ = OpenEventW(SYNCHRONIZE, FALSE, Utf8ToWide(NxGeoConst::EventName(static_cast<int>(nxPid_))).c_str());
 
     NxGeoLog::Write("overlay created: nxpid=" + std::to_string(nxPid_) +
                     " channel=" + (channel_->IsValid() ? "ok" : "MISSING"));
     return true;
+}
+
+void OverlayWindow::ShowNotice() {
+    const std::wstring text = L"几何预览开启（Ctrl+Alt+G 关闭/开启）";
+
+    HFONT font = CreateFontW(-13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Microsoft YaHei UI");
+    SIZE size{};
+    HDC screen = GetDC(hwnd_);
+    if (screen != nullptr) {
+        HGDIOBJ oldFont = SelectObject(screen, font);
+        GetTextExtentPoint32W(screen, text.c_str(), static_cast<int>(text.size()), &size);
+        SelectObject(screen, oldFont);
+        ReleaseDC(hwnd_, screen);
+    }
+    DeleteObject(font);
+
+    const int width = size.cx + kPadding * 4;
+    const int height = kToolbarHeight + kPadding * 2;
+
+    const HWND nx = NxWindow();
+    RECT nxRect{ 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN) };
+    if (nx != nullptr) GetWindowRect(nx, &nxRect);
+
+    const int x = nxRect.left + ((nxRect.right - nxRect.left) - width) / 2;
+    const int y = nxRect.top + ((nxRect.bottom - nxRect.top) - height) / 2;
+
+    showingNotice_ = true;
+    if (width != width_ || height != height_) cacheRevision_ = -1;
+    width_ = width;
+    height_ = height;
+    lastX_ = x;
+    lastY_ = y;
+
+    SetWindowPos(hwnd_, HWND_TOPMOST, x, y, width_, height_,
+                 SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_SHOWWINDOW);
+    InvalidateRect(hwnd_, nullptr, FALSE);
+    UpdateWindow(hwnd_);
 }
 
 void OverlayWindow::PlaceAtCursor() {
@@ -173,6 +215,20 @@ void OverlayWindow::Tick() {
     if (desc != lastLogged_) {
         NxGeoLog::Write(desc);
         lastLogged_ = desc;
+    }
+
+    // 启动提示：几秒后自动消失，或者用户一开始选东西就消失
+    if (noticeActive_) {
+        const bool expired = GetTickCount() > noticeUntil_;
+        const bool used = (state == OverlayState::ShowSnapshot) && snapshot.tag != 0;
+        if (expired || used) {
+            noticeActive_ = false;
+            showingNotice_ = false;
+            cacheRevision_ = -1;
+        } else {
+            ShowNotice();
+            return;
+        }
     }
 
     switch (state) {
@@ -321,18 +377,41 @@ int OverlayWindow::ContentWidth() {
     return width;
 }
 
-void OverlayWindow::Paint(HDC target) {
+void OverlayWindow::ReleaseCache() {
+    if (cacheDc_ != nullptr) {
+        if (cache_ != nullptr) DeleteObject(cache_);
+        DeleteDC(cacheDc_);
+        cacheDc_ = nullptr;
+        cache_ = nullptr;
+    }
+    cacheW_ = 0;
+    cacheH_ = 0;
+    cacheRevision_ = -1;
+}
+
+// 真正画内容：只在内容/尺寸变化时跑
+void OverlayWindow::RenderContent(HDC dc) {
     RECT client{};
     GetClientRect(hwnd_, &client);
-
-    // 双缓冲：画完一次性贴上去，避免闪烁
-    HDC dc = CreateCompatibleDC(target);
-    HBITMAP bitmap = CreateCompatibleBitmap(target, client.right, client.bottom);
-    HGDIOBJ oldBitmap = SelectObject(dc, bitmap);
 
     HBRUSH background = CreateSolidBrush(RGB(28, 28, 30));
     FillRect(dc, &client, background);
     DeleteObject(background);
+
+    if (showingNotice_) {   // 启动提示：只有一行居中文字
+        const std::wstring text = L"几何预览开启（Ctrl+Alt+G 关闭/开启）";
+        HFONT noticeFont = CreateFontW(-13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                                       DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                                       CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Microsoft YaHei UI");
+        HGDIOBJ oldFont = SelectObject(dc, noticeFont);
+        SetBkMode(dc, TRANSPARENT);
+        SetTextColor(dc, RGB(232, 232, 232));
+        RECT box = client;
+        DrawTextW(dc, text.c_str(), -1, &box, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+        SelectObject(dc, oldFont);
+        DeleteObject(noticeFont);
+        return;
+    }
 
     DrawToolbar(dc);
 
@@ -361,14 +440,38 @@ void OverlayWindow::Paint(HDC target) {
 
     SelectObject(dc, oldFont);
     DeleteObject(font);
+}
 
-    BitBlt(target, 0, 0, client.right, client.bottom, dc, 0, 0, SRCCOPY);
+// 拖动时窗口会被系统反复要求重绘：缓存命中就只贴位图，避免逐帧建字体+画文字
+void OverlayWindow::Paint(HDC target) {
+    RECT client{};
+    GetClientRect(hwnd_, &client);
+    if (client.right <= 0 || client.bottom <= 0) return;
 
-    SelectObject(dc, oldBitmap);
-    DeleteObject(bitmap);
-    DeleteDC(dc);
+    const int revision = vm_.Revision();
+    const bool cacheValid = (cache_ != nullptr) && (cacheW_ == client.right) &&
+                            (cacheH_ == client.bottom) && (cacheRevision_ == revision);
 
-    paintedRevision_ = vm_.Revision();
+    if (!cacheValid) {
+        ReleaseCache();
+
+        cacheDc_ = CreateCompatibleDC(target);
+        cache_ = CreateCompatibleBitmap(target, client.right, client.bottom);
+        if (cacheDc_ == nullptr || cache_ == nullptr) {
+            ReleaseCache();
+            return;
+        }
+        const HGDIOBJ oldBitmap = SelectObject(cacheDc_, cache_);
+        RenderContent(cacheDc_);
+        SelectObject(cacheDc_, oldBitmap);
+
+        cacheW_ = client.right;
+        cacheH_ = client.bottom;
+        cacheRevision_ = revision;
+    }
+
+    BitBlt(target, 0, 0, client.right, client.bottom, cacheDc_, 0, 0, SRCCOPY);
+    paintedRevision_ = revision;
 }
 
 int OverlayWindow::ToolbarStartX() const {
@@ -530,6 +633,7 @@ LRESULT OverlayWindow::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
             }
             return 0;
         case WM_DESTROY:
+            ReleaseCache();
             PostQuitMessage(0);
             return 0;
         default:

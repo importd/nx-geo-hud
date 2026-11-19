@@ -26,6 +26,9 @@ private:
     void Tick();
     void Reposition();
     void Paint(HDC dc);
+    void RenderContent(HDC dc);
+    void ShowNotice();
+    void ReleaseCache();
     void DrawToolbar(HDC dc);
     int  ToolbarStartX() const;
     int  ToolbarHit(int x, int y) const;
@@ -65,5 +68,15 @@ private:
     int              paintedRevision_ = -1;
     int              sizedRevision_ = -1;
     DWORD            hideSince_ = 0;         // 连续不可见计时，避免点击瞬间闪一下
+    bool             noticeActive_ = false;  // 启动提示：显示几秒
+    DWORD            noticeUntil_ = 0;
+    bool             showingNotice_ = false;
+
+    // 画面缓存：内容或尺寸没变就直接贴位图，拖动时不再逐帧重绘
+    HBITMAP          cache_ = nullptr;
+    HDC              cacheDc_ = nullptr;
+    int              cacheW_ = 0;
+    int              cacheH_ = 0;
+    int              cacheRevision_ = -1;
     std::string      lastLogged_;
 };
