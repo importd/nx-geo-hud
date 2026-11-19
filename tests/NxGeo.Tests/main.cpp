@@ -41,6 +41,7 @@ struct FakeQuery : INxQuery {
         ++l0;
         InfoSnapshot s{};
         s.tag = r.tag;
+        s.bodyTag = r.tag + 1000;   // 模拟特征→体
         s.kind = (unsigned short)ObjKind::Face;
         s.fields = Field_L0;
         return s;
@@ -343,7 +344,7 @@ static void TestSchedulerTracksPreviousTagAsDistanceTarget() {
     sch.Start();
     src.Emit(100);
     src.Emit(200);
-    CHECK_EQ(q.distanceTarget, 100u);
+    CHECK_EQ(q.distanceTarget, 1100u);   // 上一个对象的体句柄
     sch.Stop();
 }
 

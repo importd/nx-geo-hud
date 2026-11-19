@@ -1,4 +1,4 @@
-#include "QueryScheduler.h"
+﻿#include "QueryScheduler.h"
 
 #include <cstring>
 #include <exception>
@@ -95,6 +95,7 @@ void QueryScheduler::OnRef(const ObjRef& ref) {
         empty.kind = static_cast<unsigned short>(ObjKind::None);
         WriteSnapshot(empty);
         lastTag_.store(0);
+        lastHandle_ = 0;
         return;
     }
 
@@ -102,8 +103,11 @@ void QueryScheduler::OnRef(const ObjRef& ref) {
     if (ref.tag == lastTag_.load()) return;
 
     const unsigned long long gen = ++gen_;
-    const unsigned previous = lastTag_.exchange(ref.tag);
-    if (previous != 0 && query_) query_->SetDistanceTarget(previous);
+
+    // 距离目标用「上一个对象真正可测量的句柄」：特征要换成它生成的体，
+    // 否则特征 tag 之间算不出距离。
+    if (lastHandle_ != 0 && query_) query_->SetDistanceTarget(lastHandle_);
+    lastTag_.store(ref.tag);
 
     InfoSnapshot s{};
     try {
@@ -124,6 +128,7 @@ void QueryScheduler::OnRef(const ObjRef& ref) {
 
     ObjRef resolved = ref;
     resolved.kind = static_cast<ObjKind>(s.kind);   // L0 查出的真实类型，L1/L2 要用
+    lastHandle_ = s.bodyTag != 0 ? s.bodyTag : s.tag;   // 体/面/边都能测的句柄
     WriteSnapshot(s);
 
     try {

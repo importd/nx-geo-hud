@@ -46,6 +46,7 @@ private:
 
     std::atomic<unsigned long long> gen_{ 0 };
     std::atomic<unsigned>           lastTag_{ 0 };
+    unsigned                        lastHandle_ = 0;   // 上一个对象可测量的句柄（特征→体）
     std::mutex                      writeMutex_;
     bool                            started_ = false;
 
