@@ -141,6 +141,9 @@ void QueryScheduler::OnRef(const ObjRef& ref) {
     WriteSnapshot(s);
 
     Dispatch([this, resolved, s, gen]() mutable {
+        // 去抖期间选择又变了：这次 L2 直接作废，不要白算质量属性
+        if (gen != gen_.load()) return;
+
         InfoSnapshot filled = s;
         try {
             query_->FillL2(resolved, filled);

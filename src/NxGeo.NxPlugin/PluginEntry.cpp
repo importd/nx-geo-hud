@@ -2,7 +2,7 @@
 
 #include <windows.h>
 
-#include <deque>
+#include <memory>
 #include <string>
 
 #include "Log.h"
@@ -26,8 +26,10 @@ HANDLE                  g_overlayProcess = nullptr;   // 看门狗用
 DWORD                   g_lastRelaunch = 0;
 bool                    g_running = false;
 
-// L2 任务在主线程 tick 里一个个跑，绝不开后台线程调 NX
-std::deque<QueryScheduler::Task> g_tasks;
+// L2 任务：只保留最新一个，并且延迟执行（快速连点时根本不重算）
+std::unique_ptr<QueryScheduler::Task> g_pendingTask;
+DWORD g_pendingDue = 0;
+constexpr DWORD kL2DebounceMs = 120;
 
 std::wstring ModuleDir() {
     HMODULE mod = nullptr;
@@ -92,16 +94,26 @@ void WatchOverlay() {
     LaunchOverlay(static_cast<int>(GetCurrentProcessId()));
 }
 
-// 主线程 tick：轮询选择 + 跑一个挂起的 L2
+// 主线程 tick：轮询选择（L0+L1，必须快）+ 一个去抖后的 L2
 void Tick() {
     WatchOverlay();
 
+    const DWORD t0 = GetTickCount();
     if (g_source != nullptr) g_source->PollOnce();
+    const DWORD t1 = GetTickCount();
 
-    if (!g_tasks.empty()) {
-        QueryScheduler::Task task = std::move(g_tasks.front());
-        g_tasks.pop_front();
-        task();
+    // 去抖：选择稳定 120ms 后才算质量属性/距离，快速连点时不重算
+    DWORD l2ms = 0;
+    if (g_pendingTask && static_cast<long>(GetTickCount() - g_pendingDue) >= 0) {
+        std::unique_ptr<QueryScheduler::Task> task = std::move(g_pendingTask);
+        (*task)();
+        l2ms = GetTickCount() - t1;
+    }
+
+    const DWORD pollms = t1 - t0;
+    if (pollms + l2ms > 8) {   // 只在偏慢时留痕，正常不写日志
+        NxGeoLog::Write("slow: poll=" + std::to_string(pollms) + "ms l2=" +
+                        std::to_string(l2ms) + "ms");
     }
 }
 
@@ -123,7 +135,10 @@ void Start() {
     g_query = new NxQueryAdapter();
     g_source = new SelectionCaptureSource();
     g_scheduler = new QueryScheduler(g_source, g_query, g_channel,
-                                     [](QueryScheduler::Task task) { g_tasks.push_back(std::move(task)); });
+                                     [](QueryScheduler::Task task) {
+                                         g_pendingTask.reset(new QueryScheduler::Task(std::move(task)));
+                                         g_pendingDue = GetTickCount() + kL2DebounceMs;
+                                     });
     g_scheduler->Start();
 
     if (!MainThreadTick::Install(50, [] { Tick(); })) {
@@ -151,7 +166,7 @@ void Stop() {
     g_source = nullptr;
     delete g_channel;
     g_channel = nullptr;
-    g_tasks.clear();
+    g_pendingTask.reset();
 
     if (g_job) {
         CloseHandle(g_job);   // KILL_ON_JOB_CLOSE: 浮窗随 NX 退出
