@@ -706,6 +706,17 @@ void OverlayWindow::Paint(HDC target) {
     FillRect(dc, &client, background);
     DeleteObject(background);
 
+    // 钉住的冻结面板用暖色边框区分（否则两个面板长得一样分不清谁是谁）
+    if (frozen_) {
+        HPEN border = CreatePen(PS_SOLID, 2, RGB(255, 168, 64));
+        HGDIOBJ oldPen = SelectObject(dc, border);
+        HGDIOBJ oldBrush = SelectObject(dc, GetStockObject(NULL_BRUSH));
+        Rectangle(dc, 1, 1, client.right - 1, client.bottom - 1);
+        SelectObject(dc, oldBrush);
+        SelectObject(dc, oldPen);
+        DeleteObject(border);
+    }
+
     HFONT font = CreateFontW(-13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
                              DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                              CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Microsoft YaHei UI");
