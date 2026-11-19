@@ -29,19 +29,34 @@ void SelectionCaptureSource::Loop() {
     int lockFailures = 0;
 
     while (running_) {
-        unsigned tag = 0;
+        unsigned tagFromSelection = 0;
+        unsigned tagFromGlobal = 0;
+        int selectionCount = -1;
+        int globalCount = -1;
 
         if (UF_UI_lock_ug_access(UF_UI_FROM_CUSTOM) == UF_UI_LOCK_SET) {
             lockFailures = 0;
             try {
                 NXOpen::Selection* sel = NXOpen::UI::GetUI()->SelectionManager();
-                if (sel != nullptr && sel->GetNumSelectedObjects() > 0) {
-                    NXOpen::TaggedObject* obj = sel->GetSelectedTaggedObject(0);
-                    if (obj != nullptr) tag = obj->Tag();
+                if (sel != nullptr) {
+                    selectionCount = sel->GetNumSelectedObjects();
+                    if (selectionCount > 0) {
+                        NXOpen::TaggedObject* obj = sel->GetSelectedTaggedObject(0);
+                        if (obj != nullptr) tagFromSelection = obj->Tag();
+                    }
                 }
             } catch (...) {
-                tag = 0;   // 选择列表读失败时按"没选"处理，浮窗隐藏
+                // 选择列表读失败时按"没选"处理
             }
+
+            int num = 0;
+            tag_t* tags = nullptr;
+            if (UF_UI_ask_global_sel_object_list(&num, &tags) == 0) {
+                globalCount = num;
+                if (num > 0 && tags != nullptr) tagFromGlobal = tags[0];
+                if (tags != nullptr) UF_free(tags);
+            }
+
             UF_UI_unlock_ug_access(UF_UI_FROM_CUSTOM);
         } else {
             ++lockFailures;
@@ -50,8 +65,13 @@ void SelectionCaptureSource::Loop() {
             }
         }
 
+        const unsigned tag = tagFromSelection != 0 ? tagFromSelection : tagFromGlobal;
+
         if (tag != lastReported) {
-            NxGeoLog::Write("poll: selection tag=" + std::to_string(tag));
+            NxGeoLog::Write("poll: selCount=" + std::to_string(selectionCount) +
+                            " globalCount=" + std::to_string(globalCount) +
+                            " selTag=" + std::to_string(tagFromSelection) +
+                            " globalTag=" + std::to_string(tagFromGlobal));
             lastReported = tag;
         }
 
