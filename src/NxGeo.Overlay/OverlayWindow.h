@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <windows.h>
 
@@ -36,4 +36,7 @@ private:
     bool             clickThrough_ = true;
     bool             enabled_ = true;
     std::string      lastLogged_;
+    int              paintedRevision_ = -1;
+    int              lastX_ = INT_MIN;
+    int              lastY_ = INT_MIN;
 };

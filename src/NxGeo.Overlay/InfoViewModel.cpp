@@ -6,6 +6,18 @@
 
 namespace {
 
+std::string Compact(double v) {
+    char buf[32];
+    std::snprintf(buf, sizeof buf, "%.3f", v);
+    std::string s(buf);
+    const size_t dot = s.find('.');
+    if (dot != std::string::npos) {
+        s.erase(s.find_last_not_of('0') + 1);
+        if (!s.empty() && s.back() == '.') s.pop_back();
+    }
+    return s;
+}
+
 std::string Fixed4(double v) {
     char buf[64];
     std::snprintf(buf, sizeof buf, "%.4f", v);
@@ -72,9 +84,9 @@ void InfoViewModel::Apply(const InfoSnapshot& s) {
 
     if (HasField(s.fields, Field_BBox)) {
         char buf[160];
-        std::snprintf(buf, sizeof buf, "%.1f,%.1f,%.1f → %.1f,%.1f,%.1f",
-                      s.bboxMin[0], s.bboxMin[1], s.bboxMin[2],
-                      s.bboxMax[0], s.bboxMax[1], s.bboxMax[2]);
+        const std::string line = Compact(s.bboxMin[0]) + "," + Compact(s.bboxMin[1]) + "," + Compact(s.bboxMin[2]) +
+                             " → " + Compact(s.bboxMax[0]) + "," + Compact(s.bboxMax[1]) + "," + Compact(s.bboxMax[2]);
+        std::snprintf(buf, sizeof buf, "%s", line.c_str());
         next[4].value = buf;
         next[4].visible = true;
     }

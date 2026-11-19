@@ -1,4 +1,4 @@
-#include "OverlayWindow.h"
+﻿#include "OverlayWindow.h"
 
 #include <string>
 
@@ -67,6 +67,7 @@ LRESULT CALLBACK OverlayWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
 
 LRESULT OverlayWindow::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
+        case WM_ERASEBKGND: return 1;
         case WM_PAINT: {
             PAINTSTRUCT ps;
             HDC dc = BeginPaint(hwnd_, &ps);
@@ -179,8 +180,12 @@ void OverlayWindow::Tick() {
                      SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
     }
 
-    InvalidateRect(hwnd_, nullptr, FALSE);
-    ShowWindow(hwnd_, SW_SHOWNOACTIVATE);
+    if (vm_.Revision() != paintedRevision_) {
+        InvalidateRect(hwnd_, nullptr, FALSE);
+    }
+    if (!IsWindowVisible(hwnd_)) {
+        ShowWindow(hwnd_, SW_SHOWNOACTIVATE);
+    }
     Reposition();
 }
 
@@ -225,8 +230,12 @@ void OverlayWindow::Reposition() {
     const Placement p = ComputePlacement(cursor.x, cursor.y, width_, height_,
                                          nxRect.left, nxRect.top, nxRect.right, nxRect.bottom);
 
-    SetWindowPos(hwnd_, HWND_TOPMOST, p.x, p.y, 0, 0,
-                 SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+    if (p.x != lastX_ || p.y != lastY_) {
+        lastX_ = p.x;
+        lastY_ = p.y;
+        SetWindowPos(hwnd_, HWND_TOPMOST, p.x, p.y, 0, 0,
+                     SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+    }
 }
 
 // 按当前内容里最宽的一行算宽度（标题列固定 + 值列实测），并夹在合理区间
@@ -268,9 +277,14 @@ int OverlayWindow::ContentHeight() const {    int rows = 0;
     return kPadding * 2 + rows * kRowHeight;
 }
 
-void OverlayWindow::Paint(HDC dc) {
+void OverlayWindow::Paint(HDC target) {
     RECT client{};
     GetClientRect(hwnd_, &client);
+
+    // 双缓冲：先画到内存位图再一次性贴上去，避免逐行刷新造成闪烁
+    HDC dc = CreateCompatibleDC(target);
+    HBITMAP bitmap = CreateCompatibleBitmap(target, client.right, client.bottom);
+    HGDIOBJ oldBitmap = SelectObject(dc, bitmap);
 
     const HBRUSH background = CreateSolidBrush(RGB(28, 28, 30));
     FillRect(dc, &client, background);
@@ -301,8 +315,15 @@ void OverlayWindow::Paint(HDC dc) {
 
     SelectObject(dc, oldFont);
     DeleteObject(font);
-}
 
+    BitBlt(target, 0, 0, client.right, client.bottom, dc, 0, 0, SRCCOPY);
+
+    SelectObject(dc, oldBitmap);
+    DeleteObject(bitmap);
+    DeleteDC(dc);
+
+    paintedRevision_ = vm_.Revision();
+}
 int OverlayWindow::Run() {
     if (!hwnd_) return 1;
 
