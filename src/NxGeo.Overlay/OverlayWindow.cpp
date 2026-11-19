@@ -1,5 +1,7 @@
 ﻿#include "OverlayWindow.h"
 
+#include <cstdlib>
+#include <fstream>
 #include <string>
 
 #include "Log.h"
@@ -16,6 +18,77 @@ constexpr int kPadding = 6;
 constexpr int kTitleWidth = 64;
 constexpr wchar_t kClassName[] = L"NxGeoOverlayWindow";
 
+// 快捷键默认值（可在 exe 同目录的 nxgeo.ini 里改，写成 "copy=Ctrl+Shift+C"）
+struct HotkeySpec {
+    UINT mods = 0;
+    UINT vk = 0;
+};
+
+bool ParseHotkey(const std::string& text, HotkeySpec& out) {
+    out.mods = 0;
+    out.vk = 0;
+    if (text.empty() || text == "none") return false;
+
+    std::string token;
+    std::string rest = text;
+    while (!rest.empty()) {
+        const size_t plus = rest.find('+');
+        token = rest.substr(0, plus);
+        rest = (plus == std::string::npos) ? std::string() : rest.substr(plus + 1);
+
+        if (token == "Ctrl" || token == "CTRL" || token == "ctrl") out.mods |= MOD_CONTROL;
+        else if (token == "Shift" || token == "SHIFT" || token == "shift") out.mods |= MOD_SHIFT;
+        else if (token == "Alt" || token == "ALT" || token == "alt") out.mods |= MOD_ALT;
+        else if (token.size() == 1) {
+            char c = token[0];
+            out.vk = (c >= 'a' && c <= 'z') ? static_cast<UINT>(c - 'a' + 'A') : static_cast<UINT>(c);
+        } else if (token == "`" ) {
+            out.vk = VK_OEM_3;
+        } else if (token.size() >= 2 && (token[0] == 'F' || token[0] == 'f')) {
+            const int n = std::atoi(token.c_str() + 1);
+            if (n >= 1 && n <= 24) out.vk = VK_F1 + n - 1;
+        }
+        if (plus == std::string::npos) break;
+    }
+    return out.vk != 0;
+}
+
+std::wstring ExeDir() {
+    wchar_t buffer[MAX_PATH] = { 0 };
+    GetModuleFileNameW(nullptr, buffer, MAX_PATH);
+    std::wstring path(buffer);
+    const size_t pos = path.find_last_of(L"\\/");
+    return pos == std::wstring::npos ? std::wstring() : path.substr(0, pos);
+}
+
+std::string ReadIniValue(const std::wstring& iniPath, const std::string& key) {
+    std::ifstream file(iniPath);
+    std::string line;
+    while (std::getline(file, line)) {
+        if (line.empty() || line[0] == '#' || line[0] == '[') continue;
+        const size_t eq = line.find('=');
+        if (eq == std::string::npos) continue;
+        std::string name = line.substr(0, eq);
+        std::string value = line.substr(eq + 1);
+        while (!name.empty() && (name.back() == ' ' || name.back() == '\t')) name.pop_back();
+        while (!value.empty() && (value.front() == ' ' || value.front() == '\t')) value.erase(0, 1);
+        if (name == key) return value;
+    }
+    return std::string();
+}
+
+void WriteDefaultIni(const std::wstring& iniPath) {
+    if (GetFileAttributesW(iniPath.c_str()) != INVALID_FILE_ATTRIBUTES) return;
+    std::ofstream file(iniPath);
+    file << "# NX geometry overlay hotkeys. Restart NX after editing.\n";
+    file << "# Format: Ctrl/Shift/Alt + A-Z, F1-F12 or ` ; use 'none' to disable\n";
+    file << "clickthrough=Alt+`\n";
+    file << "toggle=Ctrl+Shift+G\n";
+    file << "copy=Ctrl+Shift+C\n";
+    file << "pin=Ctrl+Shift+P\n";
+}
+}  // namespace
+
 std::wstring Utf8ToWide(const std::string& text) {
     if (text.empty()) return std::wstring();
     int len = MultiByteToWideChar(CP_UTF8, 0, text.c_str(), -1, nullptr, 0);
@@ -24,8 +97,6 @@ std::wstring Utf8ToWide(const std::string& text) {
     MultiByteToWideChar(CP_UTF8, 0, text.c_str(), -1, &out[0], len);
     return out;
 }
-
-}  // namespace
 
 namespace {
 
