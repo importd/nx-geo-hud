@@ -208,6 +208,18 @@ void OverlayWindow::Reposition() {
     }
 }
 
+// 显隐的唯一判据：NX 在前台。每个 tick 重新算，不依赖历史状态。
+bool OverlayWindow::VisibilityCheck() {
+    if (ShouldStayVisible()) {
+        hideSince_ = 0;
+        return true;
+    }
+    if (hideSince_ == 0) hideSince_ = GetTickCount();
+    if (GetTickCount() - hideSince_ < 250) return false;   // 前台抖动 250ms 内不算离开
+    SetVisible(false, "not-foreground");
+    return false;
+}
+
 void OverlayWindow::Tick() {
     if (channel_ == nullptr || !enabled_) return;
 
@@ -239,30 +251,14 @@ void OverlayWindow::Tick() {
         }
     }
 
-    // 「空快照」不再隐藏面板：NX 点击新对象时会先清空选择再选中，中间的空状态
-    // 曾经让面板整块闪一下。现在保持上一个对象的内容，直到换对象或用户关闭。
+    // 空快照（NX 点击时先清空、再选中）：只表示"这次没有新内容"，
+    // 既不清空已有内容，也不影响显隐判断。
     if (state == OverlayState::Hide) {
-        if (!ShouldStayVisible()) {
-            if (hideSince_ == 0) hideSince_ = GetTickCount();
-            if (GetTickCount() - hideSince_ < 300) return;
-            SetVisible(false, "nx-not-focused");
-            return;
-        }
-        hideSince_ = 0;
-        return;
+        if (!VisibilityCheck()) return;
+        return;                              // 保留上一个对象的信息
     }
-
-    if (!ShouldStayVisible()) {
-        if (hideSince_ == 0) hideSince_ = GetTickCount();
-        if (GetTickCount() - hideSince_ < 300) return;
-        SetVisible(false, "nx-not-focused");
-        return;
-    }
-    hideSince_ = 0;
 
     switch (state) {
-        case OverlayState::Hide:
-            return;
         case OverlayState::ShowMessage:
             vm_.ShowMessage("协议版本不符，请重启 NX");
             break;
@@ -272,15 +268,18 @@ void OverlayWindow::Tick() {
                 dismissed_ = false;
                 if (autoPlace_) PlaceAtCursor();
             }
-            if (dismissed_) {
+            if (dismissed_) {                // 用户点了 ✕，等下一个对象
                 SetVisible(false, "dismissed");
                 return;
             }
             vm_.Apply(snapshot);
             break;
         }
+        default:
+            break;
     }
 
+    if (!VisibilityCheck()) return;          // 切到别的窗口就藏起来
 
     // 尺寸和位置一次算好、一次下发：分两次 SetWindowPos 会看到「先缩放再跳过去」
     const int wantedWidth = kPanelWidth;
@@ -305,8 +304,7 @@ void OverlayWindow::Tick() {
                                  (wantedWidth != appliedW_) || (wantedHeight != appliedH_);
 
     if (geometryChanged) {
-        // 关键顺序：先接受新尺寸（工具条定位依赖 width_）→ 按新尺寸渲染 → 再改窗口尺寸，
-        // 否则扩张出来的那一帧是空白，看起来就是闪一下
+        // 先接受新尺寸（工具条定位依赖 width_）→ 按新尺寸渲染 → 再改窗口尺寸
         width_ = wantedWidth;
         height_ = wantedHeight;
         EnsureCache(wantedWidth, wantedHeight, vm_.Revision());
@@ -314,10 +312,7 @@ void OverlayWindow::Tick() {
         lastY_ = y;
         appliedW_ = wantedWidth;
         appliedH_ = wantedHeight;
-        cacheRevision_ = -1;   // 尺寸变了，缓存作废
-        NxGeoLog::Write("geom: tag=" + std::to_string(snapshot.tag) +
-                        " pos=" + std::to_string(x) + "," + std::to_string(y) +
-                        " size=" + std::to_string(wantedWidth) + "x" + std::to_string(wantedHeight));
+        cacheRevision_ = -1;
         SetWindowPos(hwnd_, HWND_TOPMOST, x, y, wantedWidth, wantedHeight,
                      SWP_NOACTIVATE | SWP_NOOWNERZORDER);
     }
@@ -342,24 +337,15 @@ HWND OverlayWindow::NxWindow() {
     return nxHwnd_;
 }
 
-// 只看「NX 还在不在」：切到别的窗口不再隐藏面板（否则一圈操作回来就找不到了），
-// 只有 NX 最小化/关闭时才隐藏。
+// 面板只在 NX 是前台窗口时显示：切到浏览器/微信就收起来，切回来立刻再出现。
 bool OverlayWindow::ShouldStayVisible() {
     const HWND nx = NxWindow();
-    if (nx == nullptr) {
-        if (lastStay_) NxGeoLog::Write("stay: no NX window");
-        lastStay_ = false;
-        return false;
-    }
+    if (nx == nullptr) return false;
+    if (IsWindowVisible(nx) == FALSE || IsIconic(nx) != FALSE) return false;   // NX 最小化/关掉
 
-    const bool stay = (IsWindowVisible(nx) != FALSE) && (IsIconic(nx) == FALSE);
-    if (stay != lastStay_) {
-        lastStay_ = stay;
-        NxGeoLog::Write(std::string("stay: ") + (stay ? "1" : "0") +
-                        " nxVisible=" + (IsWindowVisible(nx) ? "1" : "0") +
-                        " minimized=" + (IsIconic(nx) ? "1" : "0"));
-    }
-    return stay;
+    DWORD foregroundPid = 0;
+    GetWindowThreadProcessId(GetForegroundWindow(), &foregroundPid);
+    return foregroundPid == nxPid_;
 }
 
 // 给 NX 的焦点窗口投递 Esc：NX 自己清空选择与高亮，等价于它的「取消选择」

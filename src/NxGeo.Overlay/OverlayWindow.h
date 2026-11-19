@@ -31,6 +31,7 @@ private:
     void ShowNotice();
     static int RowsForKind(unsigned kind);
     void SetVisible(bool show, const char* reason);
+    bool VisibilityCheck();
     void ReleaseCache();
     void DrawToolbar(HDC dc);
     int  ToolbarStartX() const;
