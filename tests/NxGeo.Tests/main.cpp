@@ -11,6 +11,7 @@
 #include "InfoSnapshot.h"
 #include "InfoViewModel.h"
 #include "NxGeoConst.h"
+#include "OverlayPlacement.h"
 #include "QueryScheduler.h"
 #include "SnapshotChannel.h"
 #include "SnapshotCodec.h"
@@ -235,6 +236,18 @@ static void TestViewModelShowsOnlyFilledFields() {
     CHECK_EQ(vm.Revision(), revision);
 }
 
+static void TestPlacementFollowsCursorAndStaysInside() {
+    Placement a = ComputePlacement(500, 500, 300, 200, 0, 0, 1920, 1080);
+    CHECK_EQ(a.x, 516);   // 光标右下 16px
+    CHECK_EQ(a.y, 520);   // 光标右下 20px
+
+    Placement p = ComputePlacement(1900, 1070, 300, 200, 0, 0, 1920, 1080);
+    CHECK(p.x + 300 <= 1920);
+    CHECK(p.y + 200 <= 1080);
+    CHECK(p.x >= 0);
+    CHECK(p.y >= 0);
+}
+
 int main() {
     TestConst();
     TestSnapshotRoundTrip();
@@ -245,6 +258,7 @@ int main() {
     TestSchedulerDedupesAndDropsStale();
     TestSchedulerEmitsNoneOnEmptySelection();
     TestViewModelShowsOnlyFilledFields();
+    TestPlacementFollowsCursorAndStaysInside();
 
     std::cout << (Check::Failures() == 0 ? "ALL PASS" : "FAILED") << "\n";
     return Check::Failures() == 0 ? 0 : 1;

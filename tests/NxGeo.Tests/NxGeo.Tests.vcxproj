@@ -38,6 +38,7 @@
   <ItemGroup>
     <ClCompile Include="main.cpp" />
     <ClCompile Include="..\..\src\NxGeo.Overlay\InfoViewModel.cpp" />
+    <ClCompile Include="..\..\src\NxGeo.Overlay\OverlayPlacement.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\NxGeo.Core\NxGeo.Core.vcxproj">
