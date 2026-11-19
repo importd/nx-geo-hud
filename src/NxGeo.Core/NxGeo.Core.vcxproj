@@ -34,6 +34,7 @@
   <ItemGroup>
     <ClCompile Include="NxGeo.Core.cpp" />
     <ClCompile Include="SnapshotCodec.cpp" />
+    <ClCompile Include="TypeNameMap.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="FieldFlags.h" />
@@ -42,6 +43,7 @@
     <ClInclude Include="ObjKind.h" />
     <ClInclude Include="ObjRef.h" />
     <ClInclude Include="SnapshotCodec.h" />
+    <ClInclude Include="TypeNameMap.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>
