@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <windows.h>
 
@@ -21,6 +21,7 @@ private:
     void Reposition();
     void Paint(HDC dc);
     int  ContentHeight() const;
+    int  ContentWidth();
     bool ShouldStayVisible();
     HWND NxWindow();
 

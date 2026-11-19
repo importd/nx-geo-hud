@@ -1,4 +1,4 @@
-﻿#include "OverlayWindow.h"
+#include "OverlayWindow.h"
 
 #include <string>
 
@@ -114,7 +114,7 @@ bool OverlayWindow::Create(HINSTANCE instance, unsigned long long nxHwnd, int nx
     if (!hwnd_) return false;
 
     ApplyNoActivateStyles(hwnd_, clickThrough_);
-    ApplyTranslucency(hwnd_, 170);
+    ApplyTranslucency(hwnd_, 120);
     RegisterHotKey(hwnd_, 1, MOD_ALT, VK_OEM_3);                    // Alt+` 切换点穿
     RegisterHotKey(hwnd_, 2, MOD_CONTROL | MOD_ALT, 'G');           // Ctrl+Alt+G 开关浮窗
 
@@ -170,9 +170,11 @@ void OverlayWindow::Tick() {
         return;
     }
 
-    const int wanted = ContentHeight();
-    if (wanted != height_) {
-        height_ = wanted;
+    const int wantedW = ContentWidth();
+    const int wantedH = ContentHeight();
+    if (wantedW != width_ || wantedH != height_) {
+        width_ = wantedW;
+        height_ = wantedH;
         SetWindowPos(hwnd_, HWND_TOPMOST, 0, 0, width_, height_,
                      SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
     }
@@ -227,8 +229,39 @@ void OverlayWindow::Reposition() {
                  SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
 }
 
-int OverlayWindow::ContentHeight() const {
-    int rows = 0;
+// 按当前内容里最宽的一行算宽度（标题列固定 + 值列实测），并夹在合理区间
+int OverlayWindow::ContentWidth() {
+    HFONT font = CreateFontW(-13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Microsoft YaHei UI");
+
+    HDC dc = GetDC(hwnd_);
+    if (dc == nullptr) {
+        DeleteObject(font);
+        return width_;
+    }
+
+    HGDIOBJ oldFont = SelectObject(dc, font);
+    int widestValue = 0;
+    for (const auto& row : vm_.Rows()) {
+        if (!row.visible) continue;
+        const std::wstring value = Utf8ToWide(row.value);
+        SIZE size{};
+        if (GetTextExtentPoint32W(dc, value.c_str(), static_cast<int>(value.size()), &size)) {
+            if (size.cx > widestValue) widestValue = size.cx;
+        }
+    }
+    SelectObject(dc, oldFont);
+    ReleaseDC(hwnd_, dc);
+    DeleteObject(font);
+
+    int width = kPadding * 2 + kTitleWidth + 6 + widestValue;
+    if (width < 220) width = 220;
+    if (width > 720) width = 720;
+    return width;
+}
+
+int OverlayWindow::ContentHeight() const {    int rows = 0;
     for (const auto& row : vm_.Rows()) {
         if (row.visible) ++rows;
     }
