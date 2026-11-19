@@ -64,5 +64,6 @@ private:
     int              lastY_ = INT_MIN;
     int              paintedRevision_ = -1;
     int              sizedRevision_ = -1;
+    DWORD            hideSince_ = 0;         // 连续不可见计时，避免点击瞬间闪一下
     std::string      lastLogged_;
 };

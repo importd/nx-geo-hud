@@ -198,9 +198,13 @@ void OverlayWindow::Tick() {
     }
 
     if (!ShouldStayVisible()) {
+        // NX 点击的瞬间前台会短暂抖动，连续不可见 250ms 才真的隐藏，否则会闪一下
+        if (hideSince_ == 0) hideSince_ = GetTickCount();
+        if (GetTickCount() - hideSince_ < 250) return;
         ShowWindow(hwnd_, SW_HIDE);
         return;
     }
+    hideSince_ = 0;
 
     if (sizedRevision_ != vm_.Revision()) {
         width_ = ContentWidth();
@@ -226,7 +230,9 @@ void OverlayWindow::Tick() {
         InvalidateRect(hwnd_, nullptr, FALSE);
         UpdateWindow(hwnd_);
     } else if (vm_.Revision() != paintedRevision_) {
+        // 尺寸可能刚变过：立刻同步重画，否则会露出一帧空白
         InvalidateRect(hwnd_, nullptr, FALSE);
+        UpdateWindow(hwnd_);
     }
 }
 
