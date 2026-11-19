@@ -93,9 +93,10 @@ LRESULT OverlayWindow::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
 }
 
 bool OverlayWindow::Create(HINSTANCE instance, unsigned long long nxHwnd, int nxPid) {
+    nxPid_ = static_cast<DWORD>(nxPid);
     nxHwnd_ = reinterpret_cast<HWND>(nxHwnd);
     if (!nxHwnd_ || !IsWindow(nxHwnd_)) {
-        nxHwnd_ = FindMainWindowForPid(static_cast<DWORD>(nxPid));
+        nxHwnd_ = FindMainWindowForPid(nxPid_);
     }
 
     WNDCLASSEXW wc{};
@@ -162,7 +163,11 @@ void OverlayWindow::Tick() {
     Reposition();
 }
 
-bool OverlayWindow::ShouldStayVisible() const {
+bool OverlayWindow::ShouldStayVisible() {
+    // 插件在 NX 启动早期就可能拉起浮窗，那时主窗还不存在：每次重新找一遍
+    if ((!nxHwnd_ || !IsWindow(nxHwnd_)) && nxPid_ != 0) {
+        nxHwnd_ = FindMainWindowForPid(nxPid_);
+    }
     if (!nxHwnd_ || !IsWindow(nxHwnd_)) return false;
 
     HWND foreground = GetAncestor(GetForegroundWindow(), GA_ROOT);

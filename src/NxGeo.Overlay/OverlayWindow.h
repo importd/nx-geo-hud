@@ -19,10 +19,11 @@ private:
     void Reposition();
     void Paint(HDC dc);
     int  ContentHeight() const;
-    bool ShouldStayVisible() const;
+    bool ShouldStayVisible();
 
     HWND             hwnd_ = nullptr;
     HWND             nxHwnd_ = nullptr;
+    DWORD            nxPid_ = 0;
     SnapshotChannel* channel_ = nullptr;
     HANDLE           wakeEvent_ = nullptr;
     InfoViewModel    vm_;

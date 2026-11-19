@@ -1,7 +1,8 @@
 # NX10 悬浮窗 真机验收记录
 
 > 用法：在 NX10 里装好插件后逐条执行，把结果写在「结果」列。
-> 前置：`build.cmd` 全绿；`install\install.ps1 -UserDir <UGII_USER_DIR>`；重启 NX10。
+> 前置：`build.cmd` 全绿；`install\install.cmd -UserDir <UGII_USER_DIR>`（**用 .cmd**，`.ps1` 会被执行策略拦）；重启 NX10。
+> 诊断：`%TEMP%\nxgeo.log` —— 没有这个文件说明 `ufsta` 没被调用（插件没加载）。
 
 | # | 场景 | 期望 | 结果 |
 |---|---|---|---|
