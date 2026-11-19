@@ -14,6 +14,7 @@
 #include "SnapshotChannel.h"
 
 #include <uf.h>
+#include <uf_part.h>
 #include <uf_ui.h>
 
 namespace {
@@ -118,7 +119,12 @@ void MaybeStartHoverProbe() {
     if (g_probeStarted || g_startTick == 0) return;
     if (GetTickCount() - g_startTick < 3000) return;
 
+    // 没有打开的零件时 UF_UI_select_with_single_dialog 会直接失败（rc=1105012）
+    const tag_t part = UF_PART_ask_display_part();
+    if (part == NULL_TAG) return;
+
     g_probeStarted = true;
+    NxGeoLog::Write("hover probe: part=" + std::to_string(static_cast<unsigned>(part)));
     StartHoverProbe();
 }
 
