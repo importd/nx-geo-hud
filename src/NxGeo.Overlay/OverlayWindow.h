@@ -60,8 +60,7 @@ private:
     int              anchorY_ = INT_MIN;
     bool             autoPlace_ = true;       // 新对象时自动贴到点击位置；手动拖动后不再自动
     unsigned         lastTag_ = 0;
-    bool             suppressed_ = false;     // 点了「取消选择」后压住当前对象
-    unsigned         suppressTag_ = 0;
+
     bool             frozen_ = false;         // 钉住的副本
     bool             closed_ = false;
     InfoSnapshot     frozenSnapshot_{};

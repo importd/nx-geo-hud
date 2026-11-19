@@ -19,7 +19,7 @@ constexpr int kTitleWidth = 64;
 constexpr int kToolbarHeight = 20;
 constexpr int kButton = 16;
 constexpr int kButtonGap = 2;
-constexpr int kButtonCount = 5;
+constexpr int kButtonCount = 4;
 constexpr wchar_t kClassName[] = L"NxGeoOverlayWindow";
 constexpr UINT WM_TRAYICON = WM_APP + 1;
 
@@ -245,23 +245,18 @@ void OverlayWindow::DrawToolbar(HDC dc) {
     for (int i = 0; i < kButtonCount; ++i) {
         const int x = startX + i * (kButton + kButtonGap);
         switch (i) {
-            case 0:   // 取消选择：一个圈加斜杠
-                Ellipse(dc, x + 3, y + 3, x + 13, y + 13);
-                MoveToEx(dc, x + 5, y + 5, nullptr);
-                LineTo(dc, x + 11, y + 11);
-                break;
-            case 1:   // 移动：四向箭头
+            case 0:   // 移动：四向箭头
                 MoveToEx(dc, x + 2, y + 8, nullptr);  LineTo(dc, x + 14, y + 8);
                 MoveToEx(dc, x + 8, y + 2, nullptr);  LineTo(dc, x + 8, y + 14);
                 MoveToEx(dc, x + 5, y + 5, nullptr);  LineTo(dc, x + 2, y + 8);  LineTo(dc, x + 5, y + 11);
                 MoveToEx(dc, x + 11, y + 5, nullptr); LineTo(dc, x + 14, y + 8); LineTo(dc, x + 11, y + 11);
                 break;
-            case 2:   // 钉住：图钉
+            case 1:   // 钉住：图钉
                 MoveToEx(dc, x + 4, y + 4, nullptr);  LineTo(dc, x + 12, y + 4);
                 MoveToEx(dc, x + 8, y + 4, nullptr);  LineTo(dc, x + 8, y + 12);
                 MoveToEx(dc, x + 5, y + 12, nullptr); LineTo(dc, x + 11, y + 12);
                 break;
-            case 3: { // 关闭：红叉
+            case 2: { // 关闭：红叉
                 HPEN red = CreatePen(PS_SOLID, 2, RGB(230, 90, 80));
                 HGDIOBJ previous = SelectObject(dc, red);
                 MoveToEx(dc, x + 4, y + 4, nullptr);  LineTo(dc, x + 12, y + 12);
@@ -270,7 +265,7 @@ void OverlayWindow::DrawToolbar(HDC dc) {
                 DeleteObject(red);
                 break;
             }
-            case 4:   // 复制：两个叠放方块
+            case 3:   // 复制：两个叠放方块
                 Rectangle(dc, x + 2, y + 2, x + 10, y + 10);
                 Rectangle(dc, x + 6, y + 6, x + 14, y + 14);
                 break;
@@ -300,26 +295,21 @@ int OverlayWindow::ToolbarHit(int x, int y) const {
 
 void OverlayWindow::PerformToolbarAction(int index) {
     switch (index) {
-        case 0:   // 取消选择：隐藏并压制当前对象，直到选中新的
-            suppressed_ = true;
-            suppressTag_ = lastTag_;
-            ShowWindow(hwnd_, SW_HIDE);
-            break;
-        case 1:   // 移动：进入拖动
+        case 0:   // 移动：进入拖动
             dragging_ = true;
             autoPlace_ = false;
             GetCursorPos(&dragStartCursor_);
             GetWindowRect(hwnd_, &dragStartRect_);
             SetCapture(hwnd_);
             break;
-        case 2:   // 钉住
+        case 1:   // 钉住
             TogglePin();
             break;
-        case 3:   // 关闭
+        case 2:   // 关闭
             enabled_ = false;
             ShowWindow(hwnd_, SW_HIDE);
             break;
-        case 4:   // 复制
+        case 3:   // 复制
             CopyToClipboard();
             break;
         default:
