@@ -25,28 +25,6 @@ bool                    g_running = false;
 // L2 任务在主线程 tick 里一个个跑，绝不开后台线程调 NX
 std::deque<QueryScheduler::Task> g_tasks;
 
-struct FindWindowContext {
-    DWORD pid;
-    HWND  result;
-};
-
-BOOL CALLBACK FindMainWindowProc(HWND hwnd, LPARAM param) {
-    auto* ctx = reinterpret_cast<FindWindowContext*>(param);
-    DWORD pid = 0;
-    GetWindowThreadProcessId(hwnd, &pid);
-    if (pid == ctx->pid && IsWindowVisible(hwnd) && GetWindow(hwnd, GW_OWNER) == nullptr) {
-        ctx->result = hwnd;
-        return FALSE;
-    }
-    return TRUE;
-}
-
-HWND FindMainWindow() {
-    FindWindowContext ctx{ GetCurrentProcessId(), nullptr };
-    EnumWindows(&FindMainWindowProc, reinterpret_cast<LPARAM>(&ctx));
-    return ctx.result;
-}
-
 std::wstring ModuleDir() {
     HMODULE mod = nullptr;
     GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
@@ -120,8 +98,7 @@ void Start() {
                                      [](QueryScheduler::Task task) { g_tasks.push_back(std::move(task)); });
     g_scheduler->Start();
 
-    const HWND nxWindow = FindMainWindow();
-    if (!MainThreadTick::Install(nxWindow, 50, [] { Tick(); })) {
+    if (!MainThreadTick::Install(50, [] { Tick(); })) {
         NxGeoLog::Write("tick install failed, plugin will not poll");
     }
 
