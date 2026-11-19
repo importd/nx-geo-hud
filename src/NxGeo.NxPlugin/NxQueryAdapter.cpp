@@ -1,4 +1,4 @@
-﻿#include "NxQueryAdapter.h"
+#include "NxQueryAdapter.h"
 
 #include <cstring>
 #include <exception>
@@ -64,6 +64,15 @@ const char* const kAreaUnits[] = { "SquareMilliMeter", "SquareMillimeter", "mm^2
 
 namespace {
 
+// 对象名（没名字时 NX 返回空串）
+void ReadObjectName(tag_t tag, char* out, size_t outSize) {
+    char buffer[256] = { 0 };
+    if (UF_OBJ_ask_name(tag, buffer) == 0 && buffer[0] != '\0') {
+        std::strncpy(out, buffer, outSize - 1);
+        out[outSize - 1] = '\0';
+    }
+}
+
 const char* FaceTypeName(int surfType) {
     switch (surfType) {
         case 16: return "圆柱面";
@@ -106,6 +115,8 @@ InfoSnapshot NxQueryAdapter::QueryL0(const ObjRef& r) {
     const tag_t t0 = static_cast<tag_t>(r.tag);
     tag_t t = t0;
     try {
+        ReadObjectName(t0, s.objectName, sizeof s.objectName);
+
         int type = 0;
         int subtype = 0;
         if (UF_OBJ_ask_type_and_subtype(t0, &type, &subtype) == 0) {
@@ -116,6 +127,9 @@ InfoSnapshot NxQueryAdapter::QueryL0(const ObjRef& r) {
                 if (UF_MODL_ask_feat_body(t0, &body) == 0 && body != NULL_TAG) {
                     t = body;
                     s.tag = static_cast<unsigned>(body);
+                    if (s.objectName[0] == '\0') {
+                        ReadObjectName(body, s.objectName, sizeof s.objectName);
+                    }
                 }
                 s.kind = static_cast<unsigned short>(ObjKind::Body);
                 std::strncpy(s.typeName, "实体(来自特征)", sizeof s.typeName - 1);

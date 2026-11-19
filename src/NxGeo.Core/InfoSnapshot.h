@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "FieldFlags.h"
 #include "NxGeoConst.h"
@@ -13,6 +13,7 @@ struct InfoSnapshot {
     unsigned           tag = 0;
     unsigned           fields = Field_None;
 
+    char               objectName[64] = { 0 };
     char               typeName[48] = { 0 };
     int                color = 0;
     int                layer = 0;

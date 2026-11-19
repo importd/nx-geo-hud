@@ -245,7 +245,7 @@ static void TestViewModelShowsOnlyFilledFields() {
     s.area = 12.5;
     vm.Apply(s);
 
-    const InfoRow& areaRow = vm.Rows()[5];
+    const InfoRow& areaRow = vm.Rows()[6];
     CHECK(areaRow.visible);
     CHECK_EQ(areaRow.value, std::string("12.500"));
 
@@ -393,10 +393,10 @@ static void TestViewModelMessageReplacesRows() {
         if (row.visible) ++visible;
     }
     CHECK_EQ(visible, 1);
-    CHECK_EQ(vm.Rows()[0].value, std::string("协议版本不符，请重启 NX"));
+    CHECK_EQ(vm.Rows()[11].value, std::string("协议版本不符，请重启 NX"));
 
     vm.Apply(s);   // 恢复快照后消息行必须消失
-    CHECK_EQ(vm.Rows()[0].value, std::string("面"));
+    CHECK_EQ(vm.Rows()[1].value, std::string("面"));
 }
 
 static void TestNewestSelected() {
