@@ -128,7 +128,12 @@ void QueryScheduler::OnRef(const ObjRef& ref) {
 
     ObjRef resolved = ref;
     resolved.kind = static_cast<ObjKind>(s.kind);   // L0 查出的真实类型，L1/L2 要用
-    lastHandle_ = s.bodyTag != 0 ? s.bodyTag : s.tag;   // 体/面/边都能测的句柄
+    // 无几何特征（草图/基准）没有可测的东西，别让它当距离目标
+    if (static_cast<ObjKind>(s.kind) == ObjKind::Other) {
+        lastHandle_ = 0;
+    } else {
+        lastHandle_ = s.bodyTag != 0 ? s.bodyTag : s.tag;   // 体/面/边都能测的句柄
+    }
     WriteSnapshot(s);
 
     try {

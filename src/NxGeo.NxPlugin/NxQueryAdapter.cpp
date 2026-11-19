@@ -133,12 +133,13 @@ InfoSnapshot NxQueryAdapter::QueryL0(const ObjRef& r) {
                     label = std::string("特征·") + featureType;
                     UF_free(featureType);
                 }
-                s.kind = static_cast<unsigned short>(ObjKind::Body);
                 std::strncpy(s.typeName, label.c_str(), sizeof s.typeName - 1);
 
                 tag_t body = NULL_TAG;
+                s.kind = static_cast<unsigned short>(ObjKind::Other);   // 先按「无几何特征」处理
                 if (UF_MODL_ask_feat_body(t0, &body) == 0 && body != NULL_TAG) {
                     t = body;
+                    s.kind = static_cast<unsigned short>(ObjKind::Body);   // 有体才按体测
                     s.bodyTag = static_cast<unsigned>(body);
                     if (s.objectName[0] == '\0') {
                         ReadObjectName(body, s.objectName, sizeof s.objectName);
@@ -282,7 +283,8 @@ InfoSnapshot NxQueryAdapter::QueryL0(const ObjRef& r) {
 void NxQueryAdapter::FillL1(const ObjRef& r, InfoSnapshot& s) {
 
     // 体不需要 L1：包围盒在 L0 就有了，面积/长度/体积分别属于面和边
-    if (static_cast<ObjKind>(s.kind) == ObjKind::Body) return;
+    const ObjKind l1Kind = static_cast<ObjKind>(s.kind);
+    if (l1Kind == ObjKind::Body || l1Kind == ObjKind::Other) return;   // 体和「无几何特征」都不测
 
     try {
         NXOpen::Part* part = WorkPart();
@@ -334,6 +336,9 @@ void NxQueryAdapter::FillL1(const ObjRef& r, InfoSnapshot& s) {
 }
 
 void NxQueryAdapter::FillL2(const ObjRef& r, InfoSnapshot& s) {
+
+    const ObjKind l2Kind = static_cast<ObjKind>(s.kind);
+    if (l2Kind == ObjKind::Other) return;   // 无几何特征：体积/距离都不可测
 
     const tag_t handle = static_cast<tag_t>(s.bodyTag != 0 ? s.bodyTag : s.tag);
     const ObjKind kind = static_cast<ObjKind>(s.kind);

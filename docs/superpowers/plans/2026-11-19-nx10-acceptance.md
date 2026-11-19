@@ -1,4 +1,4 @@
-# NX10 几何信息悬浮窗 使用与验收
+﻿# NX10 几何信息悬浮窗 使用与验收
 
 > 源码 + 构建：`E:\nxgeo`；安装目录：`%UGII_USER_DIR%\startup`
 > 更新：2026-11-19 23:00（对应 commit `d7be0ee` 之后的修复）
@@ -31,6 +31,9 @@ install\install.cmd -UserDir "<UGII_USER_DIR>"    # 用 .cmd，.ps1 会被执行
 | 距离 (mm) | `UF_MODL_ask_minimum_dist_2` | 全部，需先选过另一个对象；注解「（到上一个对象）」 |
 | 特征 | `UF_MODL_ask_face_feats` / `ask_edge_feats` | 面/边 |
 | 零件 | `UF_OBJ_ask_owning_part` + `UF_PART_ask_part_name` | 装配 occurrence（显示零件文件名，不是实例名） |
+
+**无几何特征**（草图、基准面、曲线特征等，`UF_MODL_ask_feat_body` 取不到体）：只显示 名称/类型/tag/颜色/图层，
+不做 L1/L2（没有可测的面积/体积/质量/距离），也不会被当作距离目标。
 
 ## 3. 交互
 
