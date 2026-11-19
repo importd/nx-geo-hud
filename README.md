@@ -35,7 +35,7 @@
 | 特征 | 面 / 边 | `UF_MODL_ask_face_feats` / `ask_edge_feats` |
 | 零件 | 装配 occurrence | `UF_OBJ_ask_owning_part` + `UF_PART_ask_part_name` |
 
-空字段自动隐藏。曲面不显示法向/拔模角——`UF_MODL_ask_face_data` 对圆柱/圆锥/圆环返回的是**轴线**而不是法向，与其显示假数据，不如不显示。
+面板是**固定尺寸**（340×248），空字段自动隐藏——不做内容自适应，避免 L0/L1/L2 分三步到达时窗口"一点点长大"。曲面不显示法向/拔模角——`UF_MODL_ask_face_data` 对圆柱/圆锥/圆环返回的是**轴线**而不是法向，与其显示假数据，不如不显示。
 
 ## 交互
 

@@ -23,6 +23,9 @@ constexpr int kToolbarHeight = 20;
 constexpr int kButton = 16;
 constexpr int kButtonGap = 2;
 constexpr int kButtonCount = 2;          // 复位 / 关闭
+// 固定窗口尺寸：不做内容自适应，避免内容分 L0/L1/L2 三步到达时窗口「一点点长大」
+constexpr int kPanelWidth = 340;
+constexpr int kPanelHeight = 20 + 6 * 2 + 12 * 18;   // 工具条 + 上边距 + 最多 12 行
 constexpr wchar_t kClassName[] = L"NxGeoOverlayWindow";
 constexpr BYTE kAlpha = 170;
 
@@ -262,19 +265,15 @@ void OverlayWindow::Tick() {
     }
     hideSince_ = 0;
 
-    if (sizedRevision_ != vm_.Revision()) {
-        width_ = ContentWidth();
-        sizedRevision_ = vm_.Revision();
-    }
-    const int wantedW = width_;
-    const int wantedH = ContentHeight();
-    if (wantedW != width_ || wantedH != height_) {
-        width_ = wantedW;
-        height_ = wantedH;
+    // 固定尺寸：只有从「启动提示」切回信息面板时才需要改一次
+    if (width_ != kPanelWidth || height_ != kPanelHeight) {
+        width_ = kPanelWidth;
+        height_ = kPanelHeight;
         SetWindowPos(hwnd_, HWND_TOPMOST, 0, 0, width_, height_,
                      SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
         lastX_ = INT_MIN;
         lastY_ = INT_MIN;
+        cacheRevision_ = -1;
     }
 
     // 先定尺寸和位置，再显示并立刻画完，避免「先出现在旧位置再跳」
@@ -338,44 +337,7 @@ void OverlayWindow::SaveLayout() {
     file << anchorX_ << " " << anchorY_ << " " << (autoPlace_ ? 1 : 0) << "\n";
 }
 
-int OverlayWindow::ContentHeight() const {
-    int rows = 0;
-    for (const auto& row : vm_.Rows()) {
-        if (row.visible) ++rows;
-    }
-    return kToolbarHeight + kPadding * 2 + rows * kRowHeight;
-}
 
-int OverlayWindow::ContentWidth() {
-    HFONT font = CreateFontW(-13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-                             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Microsoft YaHei UI");
-
-    HDC dc = GetDC(hwnd_);
-    if (dc == nullptr) {
-        DeleteObject(font);
-        return width_;
-    }
-
-    HGDIOBJ oldFont = SelectObject(dc, font);
-    int widestValue = 0;
-    for (const auto& row : vm_.Rows()) {
-        if (!row.visible) continue;
-        const std::wstring value = Utf8ToWide(row.value);
-        SIZE size{};
-        if (GetTextExtentPoint32W(dc, value.c_str(), static_cast<int>(value.size()), &size)) {
-            if (size.cx > widestValue) widestValue = size.cx;
-        }
-    }
-    SelectObject(dc, oldFont);
-    ReleaseDC(hwnd_, dc);
-    DeleteObject(font);
-
-    int width = kPadding * 2 + kTitleWidth + 6 + widestValue;
-    if (width < 220) width = 220;
-    if (width > 720) width = 720;
-    return width;
-}
 
 void OverlayWindow::ReleaseCache() {
     if (cacheDc_ != nullptr) {

@@ -33,8 +33,6 @@ private:
     int  ToolbarStartX() const;
     int  ToolbarHit(int x, int y) const;
     void PerformToolbarAction(int index);
-    int  ContentWidth();
-    int  ContentHeight() const;
     bool ShouldStayVisible();
     HWND NxWindow();
     void PlaceAtCursor();
@@ -66,7 +64,6 @@ private:
     int              lastX_ = INT_MIN;
     int              lastY_ = INT_MIN;
     int              paintedRevision_ = -1;
-    int              sizedRevision_ = -1;
     DWORD            hideSince_ = 0;         // 连续不可见计时，避免点击瞬间闪一下
     bool             noticeActive_ = false;  // 启动提示：显示几秒
     DWORD            noticeUntil_ = 0;
