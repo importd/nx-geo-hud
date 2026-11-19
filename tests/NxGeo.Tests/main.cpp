@@ -248,7 +248,7 @@ static void TestViewModelShowsOnlyFilledFields() {
 
     const InfoRow& areaRow = vm.Rows()[6];
     CHECK(areaRow.visible);
-    CHECK_EQ(areaRow.value, std::string("12.500"));
+    CHECK_EQ(areaRow.value, std::string("12.500 mm²"));
 
     const int revision = vm.Revision();
     vm.Apply(s);   // 完全相同，不应该产生新版本

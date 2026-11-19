@@ -18,6 +18,22 @@ std::string Compact(double v) {
     return s;
 }
 
+std::string WithUnit(double v, const char* unit, int decimals) {
+    char buf[64];
+    std::snprintf(buf, sizeof buf, "%.*f %s", decimals, v, unit);
+    return std::string(buf);
+}
+
+std::string MassText(double kg) {
+    char buf[64];
+    if (kg < 1.0) {
+        std::snprintf(buf, sizeof buf, "%.2f g", kg * 1000.0);
+    } else {
+        std::snprintf(buf, sizeof buf, "%.3f kg", kg);
+    }
+    return std::string(buf);
+}
+
 std::string Fixed4(double v) {
     char buf[64];
     std::snprintf(buf, sizeof buf, "%.4f", v);
@@ -101,19 +117,19 @@ void InfoViewModel::Apply(const InfoSnapshot& s) {
     }
 
     if (HasField(s.fields, Field_Area)) {
-        next[6].value = Fixed3(s.area);
+        next[6].value = WithUnit(s.area, "mm²", 3);
         next[6].visible = true;
-        next[7].value = Fixed3(s.perimeter);
+        next[7].value = WithUnit(s.perimeter, "mm", 3);
         next[7].visible = true;
     }
 
     if (HasField(s.fields, Field_Length)) {
-        next[8].value = Fixed3(s.length);
+        next[8].value = WithUnit(s.length, "mm", 3);
         next[8].visible = true;
     }
 
     if (HasField(s.fields, Field_Radius)) {
-        next[9].value = Fixed3(s.radius);
+        next[9].value = WithUnit(s.radius, "mm", 3);
         next[9].visible = true;
     }
 
@@ -128,22 +144,22 @@ void InfoViewModel::Apply(const InfoSnapshot& s) {
     }
 
     if (HasField(s.fields, Field_Volume)) {
-        next[12].value = Fixed3(s.volume);
+        next[12].value = WithUnit(s.volume, "mm³", 3);
         next[12].visible = true;
     }
 
     if (HasField(s.fields, Field_Surface)) {
-        next[13].value = Fixed3(s.surfaceArea);
+        next[13].value = WithUnit(s.surfaceArea, "mm²", 3);
         next[13].visible = true;
     }
 
     if (HasField(s.fields, Field_Mass)) {
-        next[14].value = Fixed3(s.mass);
+        next[14].value = MassText(s.mass);
         next[14].visible = true;
     }
 
     if (HasField(s.fields, Field_Distance)) {
-        next[15].value = Fixed4(s.distance);
+        next[15].value = WithUnit(s.distance, "mm", 4);
         next[15].visible = true;
     }
 
