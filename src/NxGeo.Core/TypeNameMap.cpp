@@ -7,14 +7,16 @@ namespace {
 
 constexpr int kSolidType = 70;
 constexpr int kBodySubtype = 0;
-constexpr int kSheetSubtype = 1;
+constexpr int kSweptSubtype = 1;
 constexpr int kFaceSubtype = 2;
 constexpr int kEdgeSubtype = 3;
 
 const std::map<std::pair<int, int>, std::string>& Table() {
     static const std::map<std::pair<int, int>, std::string> t = {
         { { kSolidType, kBodySubtype },  "实体" },
-        { { kSolidType, kSheetSubtype }, "片体" },
+        // 70/1 是 UF_solid_swept_body_subtype：内部用、不可显示，不是片体。
+        // 片体也报 (70,0)，实体/片体要靠 UF_MODL_ask_body_type 区分。
+        { { kSolidType, kSweptSubtype }, "扫掠体(内部)" },
         { { kSolidType, kFaceSubtype },  "面" },
         { { kSolidType, kEdgeSubtype },  "边" },
     };
@@ -28,11 +30,10 @@ namespace TypeNameMap {
 ObjKind KindOf(int type, int subtype) {
     if (type != kSolidType) return ObjKind::Other;
     switch (subtype) {
-        case kBodySubtype:
-        case kSheetSubtype: return ObjKind::Body;
-        case kFaceSubtype:  return ObjKind::Face;
-        case kEdgeSubtype:  return ObjKind::Edge;
-        default:            return ObjKind::Other;
+        case kBodySubtype: return ObjKind::Body;
+        case kFaceSubtype: return ObjKind::Face;
+        case kEdgeSubtype: return ObjKind::Edge;
+        default:           return ObjKind::Other;
     }
 }
 

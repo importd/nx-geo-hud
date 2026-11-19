@@ -28,6 +28,30 @@ InfoViewModel::InfoViewModel() {
     for (int i = 0; i < 11; ++i) rows_[i].title = titles[i];
 }
 
+void InfoViewModel::ShowMessage(const std::string& text) {
+    std::vector<InfoRow> next = rows_;
+    for (auto& row : next) {
+        row.value.clear();
+        row.visible = false;
+    }
+    if (!next.empty()) {
+        next[0].value = text;
+        next[0].visible = true;
+    }
+
+    bool changed = false;
+    for (size_t i = 0; i < rows_.size(); ++i) {
+        if (rows_[i].value != next[i].value || rows_[i].visible != next[i].visible) {
+            changed = true;
+            break;
+        }
+    }
+    if (changed) {
+        rows_ = next;
+        ++revision_;
+    }
+}
+
 void InfoViewModel::Apply(const InfoSnapshot& s) {
     std::vector<InfoRow> next = rows_;
     for (auto& row : next) {

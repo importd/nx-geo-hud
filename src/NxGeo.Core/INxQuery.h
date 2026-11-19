@@ -15,4 +15,7 @@ struct INxQuery {
 
     // L2：体积 / 距离，可能慢，由调度器放到后台
     virtual void FillL2(const ObjRef& r, InfoSnapshot& s) = 0;
+
+    // D3：距离量到「上一个选中的对象」；默认不关心
+    virtual void SetDistanceTarget(unsigned /*tag*/) {}
 };

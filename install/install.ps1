@@ -10,7 +10,7 @@ if (-not $UserDir) {
 
 $root = Split-Path -Parent $PSScriptRoot
 $dll = Join-Path $root 'src\NxGeo.NxPlugin\x64\Debug\NxGeo.NxPlugin.dll'
-$exe = Join-Path $root 'src\NxGeo.Overlay\x64\Debug\NxGeo.Overlay.exe'
+$exe = Join-Path $root 'src\NxGeo.Overlay\x64\Debug\nxgeo-overlay.exe'
 
 foreach ($f in @($dll, $exe)) {
     if (-not (Test-Path $f)) { throw "先跑 build.cmd，缺少产物：$f" }
@@ -24,5 +24,5 @@ Copy-Item $exe $startup -Force
 
 Write-Host "installed -> $startup"
 Write-Host "  NxGeo.NxPlugin.dll   (NX 启动时调用 ufsta 自动加载)"
-Write-Host "  NxGeo.Overlay.exe    (插件按需拉起)"
+Write-Host "  nxgeo-overlay.exe    (插件按需拉起)"
 Write-Host "重启 NX 生效。卸载：uninstall.ps1 -UserDir $UserDir"

@@ -6,6 +6,7 @@
 #include "NxGeoConst.h"
 #include "ObjKind.h"
 #include "OverlayPlacement.h"
+#include "OverlayState.h"
 
 namespace {
 
@@ -76,6 +77,9 @@ LRESULT OverlayWindow::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
             if (wp == 1) {
                 clickThrough_ = !clickThrough_;
                 ApplyNoActivateStyles(hwnd_, clickThrough_);
+            } else if (wp == 2) {
+                enabled_ = !enabled_;   // Ctrl+Alt+G：临时关掉/恢复
+                if (!enabled_) ShowWindow(hwnd_, SW_HIDE);
             }
             return 0;
         }
@@ -109,7 +113,12 @@ bool OverlayWindow::Create(HINSTANCE instance, unsigned long long nxHwnd, int nx
 
     ApplyNoActivateStyles(hwnd_, clickThrough_);
     ApplyTranslucency(hwnd_, 235);
-    RegisterHotKey(hwnd_, 1, MOD_ALT, VK_OEM_3);   // Alt+` 切换点穿
+    RegisterHotKey(hwnd_, 1, MOD_ALT, VK_OEM_3);                    // Alt+` 切换点穿
+    RegisterHotKey(hwnd_, 2, MOD_CONTROL | MOD_ALT, 'G');           // Ctrl+Alt+G 开关浮窗
+
+    if (nxHwnd_ && IsWindow(nxHwnd_)) {
+        SetWindowLongPtrW(hwnd_, GWLP_HWNDPARENT, reinterpret_cast<LONG_PTR>(nxHwnd_));   // owner = NX 主窗
+    }
 
     channel_ = new SnapshotChannel(NxGeoConst::SharedMemoryName(nxPid), false);
     wakeEvent_ = OpenEventW(SYNCHRONIZE, FALSE, Utf8ToWide(NxGeoConst::EventName(nxPid)).c_str());
@@ -117,21 +126,29 @@ bool OverlayWindow::Create(HINSTANCE instance, unsigned long long nxHwnd, int nx
 }
 
 void OverlayWindow::Tick() {
-    if (!channel_) return;
+    if (!channel_ || !enabled_) return;
 
     InfoSnapshot snapshot{};
-    if (!channel_->TryRead(snapshot)) {
+    const bool readOk = channel_->TryRead(snapshot);
+    const bool mismatch = channel_->VersionMismatch();
+    const bool isEmpty = readOk && snapshot.kind == static_cast<unsigned short>(ObjKind::None);
+
+    switch (DecideOverlayState(readOk, mismatch, isEmpty)) {
+        case OverlayState::Hide:
+            ShowWindow(hwnd_, SW_HIDE);
+            return;
+        case OverlayState::ShowMessage:
+            vm_.ShowMessage("协议版本不符，请重启 NX");
+            break;
+        case OverlayState::ShowSnapshot:
+            vm_.Apply(snapshot);
+            break;
+    }
+
+    if (!ShouldStayVisible()) {
         ShowWindow(hwnd_, SW_HIDE);
         return;
     }
-
-    if (snapshot.kind == static_cast<unsigned short>(ObjKind::None)) {
-        ShowWindow(hwnd_, SW_HIDE);
-        return;
-    }
-
-    const int before = vm_.Revision();
-    vm_.Apply(snapshot);
 
     const int wanted = ContentHeight();
     if (wanted != height_) {
@@ -140,11 +157,23 @@ void OverlayWindow::Tick() {
                      SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
     }
 
-    if (vm_.Revision() != before || !IsWindowVisible(hwnd_)) {
-        InvalidateRect(hwnd_, nullptr, FALSE);
-        ShowWindow(hwnd_, SW_SHOWNOACTIVATE);
-    }
+    InvalidateRect(hwnd_, nullptr, FALSE);
+    ShowWindow(hwnd_, SW_SHOWNOACTIVATE);
     Reposition();
+}
+
+bool OverlayWindow::ShouldStayVisible() const {
+    if (!nxHwnd_ || !IsWindow(nxHwnd_)) return false;
+
+    HWND foreground = GetAncestor(GetForegroundWindow(), GA_ROOT);
+    if (foreground != GetAncestor(nxHwnd_, GA_ROOT)) return false;
+
+    POINT cursor{};
+    GetCursorPos(&cursor);
+
+    RECT nxRect{};
+    GetWindowRect(nxHwnd_, &nxRect);
+    return PointInRect(cursor.x, cursor.y, nxRect.left, nxRect.top, nxRect.right, nxRect.bottom);
 }
 
 void OverlayWindow::Reposition() {

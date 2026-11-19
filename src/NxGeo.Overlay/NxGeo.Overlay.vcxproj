@@ -22,6 +22,7 @@
   <PropertyGroup>
     <OutDir>$(ProjectDir)x64\$(Configuration)\</OutDir>
     <IntDir>$(ProjectDir)obj\$(Configuration)\</IntDir>
+    <TargetName>nxgeo-overlay</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>
@@ -45,7 +46,11 @@
     <ClInclude Include="InfoViewModel.h" />
     <ClInclude Include="Native.h" />
     <ClInclude Include="OverlayPlacement.h" />
+    <ClInclude Include="OverlayState.h" />
     <ClInclude Include="OverlayWindow.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="app.manifest" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\NxGeo.Core\NxGeo.Core.vcxproj">

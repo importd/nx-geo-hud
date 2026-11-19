@@ -36,11 +36,13 @@ private:
     void OnRef(const ObjRef& ref);
     void Dispatch(Task task);
     void WorkerLoop();
+    void WriteSnapshot(const InfoSnapshot& snapshot);
 
     ICaptureSource*                src_;
     INxQuery*                      query_;
     SnapshotChannel*               ch_;
     Dispatcher                     dispatch_;
+    bool                           ownWorker_ = false;
 
     std::atomic<unsigned long long> gen_{ 0 };
     std::atomic<unsigned>           lastTag_{ 0 };

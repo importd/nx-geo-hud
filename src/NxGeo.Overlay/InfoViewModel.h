@@ -17,6 +17,7 @@ public:
     InfoViewModel();
 
     void                     Apply(const InfoSnapshot& s);
+    void                     ShowMessage(const std::string& text);
     const std::vector<InfoRow>& Rows() const { return rows_; }
     int                      Revision() const { return revision_; }
 

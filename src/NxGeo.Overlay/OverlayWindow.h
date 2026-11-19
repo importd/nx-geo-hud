@@ -19,6 +19,7 @@ private:
     void Reposition();
     void Paint(HDC dc);
     int  ContentHeight() const;
+    bool ShouldStayVisible() const;
 
     HWND             hwnd_ = nullptr;
     HWND             nxHwnd_ = nullptr;
@@ -28,4 +29,5 @@ private:
     int              width_ = 340;
     int              height_ = 120;
     bool             clickThrough_ = true;
+    bool             enabled_ = true;
 };

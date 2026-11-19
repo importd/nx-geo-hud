@@ -25,6 +25,8 @@
 #include <NXOpen/UnitCollection.hxx>
 
 #include "FieldFlags.h"
+#include "Log.h"
+#include "NxAccessLock.h"
 #include "TypeNameMap.h"
 
 namespace {
@@ -48,6 +50,8 @@ NXOpen::Unit* FindUnit(NXOpen::Part* part, const char* name) {
 }  // namespace
 
 InfoSnapshot NxQueryAdapter::QueryL0(const ObjRef& r) {
+    NxAccessLock lock;   // 非主线程调 NXOpen/UFUN 必须持锁
+
     InfoSnapshot s{};
     s.tag = r.tag;
     s.kind = static_cast<unsigned short>(r.kind);
@@ -87,19 +91,20 @@ InfoSnapshot NxQueryAdapter::QueryL0(const ObjRef& r) {
 }
 
 void NxQueryAdapter::FillL1(const ObjRef& r, InfoSnapshot& s) {
-    NXOpen::Part* part = WorkPart();
-    if (!part) {
-        SetNote(s, "无工作部件");
-        return;
-    }
-
-    NXOpen::TaggedObject* obj = NXOpen::NXObjectManager::Get(static_cast<tag_t>(r.tag));
-    if (!obj) {
-        SetNote(s, "对象已删除");
-        return;
-    }
+    NxAccessLock lock;
 
     try {
+        NXOpen::Part* part = WorkPart();
+        if (!part) {
+            SetNote(s, "无工作部件");
+            return;
+        }
+
+        NXOpen::TaggedObject* obj = NXOpen::NXObjectManager::Get(static_cast<tag_t>(r.tag));
+        if (!obj) {
+            SetNote(s, "对象已删除");
+            return;
+        }
         NXOpen::MeasureManager* mm = part->MeasureManager();
         NXOpen::Unit* lengthUnit = FindUnit(part, "Millimeter");
         NXOpen::Unit* areaUnit = FindUnit(part, "SquareMillimeter");
@@ -136,6 +141,8 @@ void NxQueryAdapter::FillL1(const ObjRef& r, InfoSnapshot& s) {
 }
 
 void NxQueryAdapter::FillL2(const ObjRef& r, InfoSnapshot& s) {
+    NxAccessLock lock;
+
     try {
         if (r.kind == ObjKind::Body) {
             tag_t t = static_cast<tag_t>(r.tag);

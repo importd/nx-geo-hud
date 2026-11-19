@@ -5,6 +5,7 @@
 #include <string>
 
 #include "NxGeoConst.h"
+#include "Log.h"
 #include "NxQueryAdapter.h"
 #include "QueryScheduler.h"
 #include "SelectionCaptureSource.h"
@@ -44,8 +45,11 @@ void LaunchOverlay(int pid) {
     si.cb = sizeof si;
     PROCESS_INFORMATION pi{};
     if (!CreateProcessW(nullptr, &cmd[0], nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi)) {
+        NxGeoLog::Write("launch overlay FAILED: " + std::to_string(GetLastError()) +
+                        " exe=" + std::string(exe.begin(), exe.end()));
         return;
     }
+    NxGeoLog::Write("overlay launched, pid=" + std::to_string(pi.dwProcessId));
 
     g_job = CreateJobObjectW(nullptr, nullptr);
     if (g_job) {
@@ -55,6 +59,7 @@ void LaunchOverlay(int pid) {
         AssignProcessToJobObject(g_job, pi.hProcess);
     }
     CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
 }
 
 }  // namespace
@@ -77,6 +82,7 @@ void Start() {
 
     LaunchOverlay(pid);
     g_running = true;
+    NxGeoLog::Write("PluginEntry::Start ok, pid=" + std::to_string(pid));
 }
 
 void Stop() {
@@ -99,6 +105,7 @@ void Stop() {
         g_job = nullptr;
     }
     g_running = false;
+    NxGeoLog::Write("PluginEntry::Stop");
 }
 
 bool IsRunning() { return g_running; }
