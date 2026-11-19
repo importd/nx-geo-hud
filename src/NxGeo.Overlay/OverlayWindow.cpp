@@ -114,7 +114,7 @@ bool OverlayWindow::Create(HINSTANCE instance, unsigned long long nxHwnd, int nx
     if (!hwnd_) return false;
 
     ApplyNoActivateStyles(hwnd_, clickThrough_);
-    ApplyTranslucency(hwnd_, 235);
+    ApplyTranslucency(hwnd_, 195);
     RegisterHotKey(hwnd_, 1, MOD_ALT, VK_OEM_3);                    // Alt+` 切换点穿
     RegisterHotKey(hwnd_, 2, MOD_CONTROL | MOD_ALT, 'G');           // Ctrl+Alt+G 开关浮窗
 
