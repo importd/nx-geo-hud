@@ -1,4 +1,4 @@
-#include "NxQueryAdapter.h"
+﻿#include "NxQueryAdapter.h"
 
 #include <cstring>
 #include <exception>
@@ -148,12 +148,12 @@ InfoSnapshot NxQueryAdapter::QueryL0(const ObjRef& r) {
                             default:
                                 break;
                         }
-                        name = std::string(FaceTypeName(surfType)) + extra;
+                        name = std::string(FaceTypeName(surfType)) + " " + std::to_string(surfType) + extra;
                     }
                 } else if (s.kind == static_cast<unsigned short>(ObjKind::Edge)) {
                     int edgeType = 0;
                     if (UF_MODL_ask_edge_type(t, &edgeType) == 0) {
-                        name = EdgeTypeName(edgeType);
+                        name = std::string(EdgeTypeName(edgeType)) + " " + std::to_string(edgeType);
                     }
                 }
 

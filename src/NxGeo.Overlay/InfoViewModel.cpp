@@ -6,6 +6,12 @@
 
 namespace {
 
+std::string Fixed4(double v) {
+    char buf[64];
+    std::snprintf(buf, sizeof buf, "%.4f", v);
+    return std::string(buf);
+}
+
 std::string Fixed3(double v) {
     char buf[64];
     std::snprintf(buf, sizeof buf, "%.3f", v);
@@ -91,7 +97,7 @@ void InfoViewModel::Apply(const InfoSnapshot& s) {
     }
 
     if (HasField(s.fields, Field_Distance)) {
-        next[9].value = Fixed3(s.distance);
+        next[9].value = Fixed4(s.distance);
         next[9].visible = true;
     }
 

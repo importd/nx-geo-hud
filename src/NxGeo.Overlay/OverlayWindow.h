@@ -30,7 +30,7 @@ private:
     SnapshotChannel* channel_ = nullptr;
     HANDLE           wakeEvent_ = nullptr;
     InfoViewModel    vm_;
-    int              width_ = 430;
+    int              width_ = 360;
     int              height_ = 120;
     bool             clickThrough_ = true;
     bool             enabled_ = true;

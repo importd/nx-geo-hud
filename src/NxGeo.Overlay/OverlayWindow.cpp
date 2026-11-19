@@ -11,9 +11,9 @@
 
 namespace {
 
-constexpr int kRowHeight = 20;
-constexpr int kPadding = 8;
-constexpr int kTitleWidth = 78;
+constexpr int kRowHeight = 18;
+constexpr int kPadding = 6;
+constexpr int kTitleWidth = 64;
 constexpr wchar_t kClassName[] = L"NxGeoOverlayWindow";
 
 std::wstring Utf8ToWide(const std::string& text) {
@@ -114,7 +114,7 @@ bool OverlayWindow::Create(HINSTANCE instance, unsigned long long nxHwnd, int nx
     if (!hwnd_) return false;
 
     ApplyNoActivateStyles(hwnd_, clickThrough_);
-    ApplyTranslucency(hwnd_, 195);
+    ApplyTranslucency(hwnd_, 170);
     RegisterHotKey(hwnd_, 1, MOD_ALT, VK_OEM_3);                    // Alt+` 切换点穿
     RegisterHotKey(hwnd_, 2, MOD_CONTROL | MOD_ALT, 'G');           // Ctrl+Alt+G 开关浮窗
 
@@ -243,7 +243,7 @@ void OverlayWindow::Paint(HDC dc) {
     FillRect(dc, &client, background);
     DeleteObject(background);
 
-    HFONT font = CreateFontW(-14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+    HFONT font = CreateFontW(-13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
                              DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                              CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Microsoft YaHei UI");
     HGDIOBJ oldFont = SelectObject(dc, font);
