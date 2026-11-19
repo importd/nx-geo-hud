@@ -111,12 +111,23 @@ std::string Ms(double value) {
     return std::string(buf);
 }
 
+DWORD g_nextPollAt = 0;   // 轮询自适应退避：贵的时候降低频率
+
 void Tick() {
     WatchOverlay();
 
-    const double t0 = NowMs();
-    if (g_source != nullptr) g_source->PollOnce();
-    const double t1 = NowMs();
+    double pollms = 0.0;
+    double t1 = NowMs();
+    const DWORD now = GetTickCount();
+    if (g_source != nullptr && now >= g_nextPollAt) {
+        const double t0 = NowMs();
+        g_source->PollOnce();
+        t1 = NowMs();
+        pollms = t1 - t0;
+        // 一次轮询超过 4ms（通常意味着选中了几十个对象），就把节奏降到 100ms；
+        // 否则维持 50ms。人眼对 100ms 的选择延迟基本无感，但主线程占用减半。
+        g_nextPollAt = GetTickCount() + (pollms > 4.0 ? 100 : 50);
+    }
 
     // 去抖：选择稳定 120ms 后才算质量属性/距离，快速连点时不重算
     double l2ms = 0.0;
@@ -126,7 +137,6 @@ void Tick() {
         l2ms = NowMs() - t1;
     }
 
-    const double pollms = t1 - t0;
     if (pollms + l2ms > 8.0) {   // 只在偏慢时留痕，正常不写日志
         NxGeoLog::Write("slow: poll=" + Ms(pollms) + "ms l2=" + Ms(l2ms) + "ms");
     }

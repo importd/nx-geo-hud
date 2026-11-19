@@ -44,6 +44,7 @@ void SelectionCaptureSource::PollOnce() {
     }
 
     if (current.empty()) {   // 兜底：某些上下文下 UFUN 拿不到
+        NxGeoLog::Write("poll: UFUN returned nothing, falling back to NXOpen");
         try {
             NXOpen::Selection* sel = NXOpen::UI::GetUI()->SelectionManager();
             if (sel != nullptr) {
