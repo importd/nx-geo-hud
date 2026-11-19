@@ -1,4 +1,4 @@
-#include "SelectionCaptureSource.h"
+﻿#include "SelectionCaptureSource.h"
 
 #include <windows.h>
 #undef CreateDialog   // NX UI.hxx 的方法名与 Win32 宏冲突
@@ -31,25 +31,30 @@ void SelectionCaptureSource::PollOnce() {
 
     std::vector<unsigned> current;
 
-    try {
-        NXOpen::Selection* sel = NXOpen::UI::GetUI()->SelectionManager();
-        if (sel != nullptr) {
-            const int count = sel->GetNumSelectedObjects();
-            for (int i = 0; i < count; ++i) {
-                NXOpen::TaggedObject* obj = sel->GetSelectedTaggedObject(i);
-                if (obj != nullptr) current.push_back(obj->Tag());
-            }
+    // 先用 UFUN 一次性拿全局选择列表：多选十几个对象时，
+    // NXOpen 的逐对象虚调用要 16ms，而这是一次调用 + 一次释放。
+    int num = 0;
+    tag_t* tags = nullptr;
+    if (UF_UI_ask_global_sel_object_list(&num, &tags) == 0) {
+        if (num > 0 && tags != nullptr) {
+            current.reserve(static_cast<size_t>(num));
+            for (int i = 0; i < num; ++i) current.push_back(tags[i]);
         }
-    } catch (...) {
-        NxGeoLog::Write("poll: SelectionManager threw");
+        if (tags != nullptr) UF_free(tags);
     }
 
-    if (current.empty()) {
-        int num = 0;
-        tag_t* tags = nullptr;
-        if (UF_UI_ask_global_sel_object_list(&num, &tags) == 0) {
-            for (int i = 0; i < num && tags != nullptr; ++i) current.push_back(tags[i]);
-            if (tags != nullptr) UF_free(tags);
+    if (current.empty()) {   // 兜底：某些上下文下 UFUN 拿不到
+        try {
+            NXOpen::Selection* sel = NXOpen::UI::GetUI()->SelectionManager();
+            if (sel != nullptr) {
+                const int count = sel->GetNumSelectedObjects();
+                for (int i = 0; i < count; ++i) {
+                    NXOpen::TaggedObject* obj = sel->GetSelectedTaggedObject(i);
+                    if (obj != nullptr) current.push_back(obj->Tag());
+                }
+            }
+        } catch (...) {
+            NxGeoLog::Write("poll: SelectionManager threw");
         }
     }
 
