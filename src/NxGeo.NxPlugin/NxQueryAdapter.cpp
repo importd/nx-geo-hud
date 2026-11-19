@@ -1,4 +1,4 @@
-#include "NxQueryAdapter.h"
+﻿#include "NxQueryAdapter.h"
 
 #include <cstring>
 #include <exception>
@@ -26,7 +26,6 @@
 
 #include "FieldFlags.h"
 #include "Log.h"
-#include "NxAccessLock.h"
 #include "TypeNameMap.h"
 
 namespace {
@@ -50,7 +49,6 @@ NXOpen::Unit* FindUnit(NXOpen::Part* part, const char* name) {
 }  // namespace
 
 InfoSnapshot NxQueryAdapter::QueryL0(const ObjRef& r) {
-    NxAccessLock lock;   // 非主线程调 NXOpen/UFUN 必须持锁
 
     InfoSnapshot s{};
     s.tag = r.tag;
@@ -91,7 +89,6 @@ InfoSnapshot NxQueryAdapter::QueryL0(const ObjRef& r) {
 }
 
 void NxQueryAdapter::FillL1(const ObjRef& r, InfoSnapshot& s) {
-    NxAccessLock lock;
 
     try {
         NXOpen::Part* part = WorkPart();
@@ -141,7 +138,6 @@ void NxQueryAdapter::FillL1(const ObjRef& r, InfoSnapshot& s) {
 }
 
 void NxQueryAdapter::FillL2(const ObjRef& r, InfoSnapshot& s) {
-    NxAccessLock lock;
 
     try {
         if (r.kind == ObjKind::Body) {

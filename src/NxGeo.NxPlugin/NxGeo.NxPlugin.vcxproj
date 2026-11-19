@@ -39,12 +39,15 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="MainThreadTick.cpp" />
     <ClCompile Include="NxQueryAdapter.cpp" />
     <ClCompile Include="PluginEntry.cpp" />
     <ClCompile Include="SelectionCaptureSource.cpp" />
     <ClCompile Include="ufusr.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="MainThreadTick.h" />
+    <ClInclude Include="NxAccessLock.h" />
     <ClInclude Include="NxQueryAdapter.h" />
     <ClInclude Include="PluginEntry.h" />
     <ClInclude Include="SelectionCaptureSource.h" />

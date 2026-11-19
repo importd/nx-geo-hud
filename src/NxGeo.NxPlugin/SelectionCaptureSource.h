@@ -1,22 +1,19 @@
 #pragma once
 
-#include <atomic>
 #include <functional>
-#include <thread>
 
 #include "ICaptureSource.h"
 
-// 每 50ms 读一次 NX 当前选择列表；只取 tag，不做几何查询。
-// NXOpen 调用必须在 NX 主线程或持 UG access 锁时执行，这里用后者。
+// 选择轮询：不再自带线程，由 MainThreadTick 在 NX 主线程上驱动 PollOnce()。
 class SelectionCaptureSource : public ICaptureSource {
 public:
     void Start(std::function<void(const ObjRef&)> sink) override;
     void Stop() override;
 
-private:
-    void Loop();
+    // 必须在 NX 主线程调用
+    void PollOnce();
 
+private:
     std::function<void(const ObjRef&)> sink_;
-    std::thread                        thread_;
-    std::atomic<bool>                  running_{ false };
+    unsigned                           lastTag_ = 0xFFFFFFFFu;
 };

@@ -2,10 +2,12 @@
 
 #include <windows.h>
 
+#include <deque>
 #include <string>
 
-#include "NxGeoConst.h"
 #include "Log.h"
+#include "MainThreadTick.h"
+#include "NxGeoConst.h"
 #include "NxQueryAdapter.h"
 #include "QueryScheduler.h"
 #include "SelectionCaptureSource.h"
@@ -19,6 +21,31 @@ SnapshotChannel*        g_channel = nullptr;
 QueryScheduler*         g_scheduler = nullptr;
 HANDLE                  g_job = nullptr;
 bool                    g_running = false;
+
+// L2 任务在主线程 tick 里一个个跑，绝不开后台线程调 NX
+std::deque<QueryScheduler::Task> g_tasks;
+
+struct FindWindowContext {
+    DWORD pid;
+    HWND  result;
+};
+
+BOOL CALLBACK FindMainWindowProc(HWND hwnd, LPARAM param) {
+    auto* ctx = reinterpret_cast<FindWindowContext*>(param);
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    if (pid == ctx->pid && IsWindowVisible(hwnd) && GetWindow(hwnd, GW_OWNER) == nullptr) {
+        ctx->result = hwnd;
+        return FALSE;
+    }
+    return TRUE;
+}
+
+HWND FindMainWindow() {
+    FindWindowContext ctx{ GetCurrentProcessId(), nullptr };
+    EnumWindows(&FindMainWindowProc, reinterpret_cast<LPARAM>(&ctx));
+    return ctx.result;
+}
 
 std::wstring ModuleDir() {
     HMODULE mod = nullptr;
@@ -45,8 +72,7 @@ void LaunchOverlay(int pid) {
     si.cb = sizeof si;
     PROCESS_INFORMATION pi{};
     if (!CreateProcessW(nullptr, &cmd[0], nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi)) {
-        NxGeoLog::Write("launch overlay FAILED: " + std::to_string(GetLastError()) +
-                        " exe=" + std::string(exe.begin(), exe.end()));
+        NxGeoLog::Write("launch overlay FAILED: " + std::to_string(GetLastError()));
         return;
     }
     NxGeoLog::Write("overlay launched, pid=" + std::to_string(pi.dwProcessId));
@@ -60,6 +86,17 @@ void LaunchOverlay(int pid) {
     }
     CloseHandle(pi.hThread);
     CloseHandle(pi.hProcess);
+}
+
+// 主线程 tick：轮询选择 + 跑一个挂起的 L2
+void Tick() {
+    if (g_source != nullptr) g_source->PollOnce();
+
+    if (!g_tasks.empty()) {
+        QueryScheduler::Task task = std::move(g_tasks.front());
+        g_tasks.pop_front();
+        task();
+    }
 }
 
 }  // namespace
@@ -79,8 +116,14 @@ void Start() {
 
     g_query = new NxQueryAdapter();
     g_source = new SelectionCaptureSource();
-    g_scheduler = new QueryScheduler(g_source, g_query, g_channel);
+    g_scheduler = new QueryScheduler(g_source, g_query, g_channel,
+                                     [](QueryScheduler::Task task) { g_tasks.push_back(std::move(task)); });
     g_scheduler->Start();
+
+    const HWND nxWindow = FindMainWindow();
+    if (!MainThreadTick::Install(nxWindow, 50, [] { Tick(); })) {
+        NxGeoLog::Write("tick install failed, plugin will not poll");
+    }
 
     LaunchOverlay(pid);
     g_running = true;
@@ -89,6 +132,8 @@ void Start() {
 
 void Stop() {
     if (!g_running) return;
+
+    MainThreadTick::Remove();
 
     if (g_scheduler) {
         g_scheduler->Stop();
@@ -101,6 +146,7 @@ void Stop() {
     g_source = nullptr;
     delete g_channel;
     g_channel = nullptr;
+    g_tasks.clear();
 
     if (g_job) {
         CloseHandle(g_job);   // KILL_ON_JOB_CLOSE: 浮窗随 NX 退出
