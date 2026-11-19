@@ -17,17 +17,7 @@ extern "C" __declspec(dllexport) void ufsta(char* param, int* retCode, int rlen)
 }
 
 extern "C" __declspec(dllexport) void ufusr(char* param, int* retCode, int paramLen) {
-    (void)param;
-    (void)paramLen;
-    if (retCode) *retCode = 0;
-
-    if (PluginEntry::IsRunning()) {
-        // 插件已在跑：把 ufusr 当作手动触发悬停验证的入口
-        PluginEntry::RunHoverProbe();
-        return;
-    }
-
-    ufsta(nullptr, retCode, 0);
+    ufsta(param, retCode, paramLen);
 }
 
 extern "C" __declspec(dllexport) int ufusr_ask_unload(void) {

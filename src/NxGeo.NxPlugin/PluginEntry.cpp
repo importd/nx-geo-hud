@@ -1,4 +1,4 @@
-#include "PluginEntry.h"
+﻿#include "PluginEntry.h"
 
 #include <windows.h>
 
@@ -14,8 +14,6 @@
 #include "SnapshotChannel.h"
 
 #include <uf.h>
-#include <uf_part.h>
-#include <uf_ui.h>
 
 namespace {
 
@@ -70,12 +68,8 @@ void LaunchOverlay(int pid) {
     CloseHandle(pi.hProcess);
 }
 
-void MaybeStartHoverProbe();
-
 // 主线程 tick：轮询选择 + 跑一个挂起的 L2
 void Tick() {
-    MaybeStartHoverProbe();
-
     if (g_source != nullptr) g_source->PollOnce();
 
     if (!g_tasks.empty()) {
@@ -83,43 +77,6 @@ void Tick() {
         g_tasks.pop_front();
         task();
     }
-}
-
-// ---- 悬停验证（临时代码）----
-// 验证 UF_UI_select_with_single_dialog 的 filter 回调是否会在鼠标悬停时触发。
-bool   g_probeStarted = false;
-DWORD  g_startTick = 0;
-
-int SelFilter(tag_t object, int type[3], void* /*user_data*/, UF_UI_selection_p_t /*select_*/) {
-    NxGeoLog::Write("hover: tag=" + std::to_string(static_cast<unsigned>(object)) +
-                    " type=" + std::to_string(type[0]) + "/" + std::to_string(type[1]));
-    return UF_UI_SEL_REJECT;   // 只观察，不选中
-}
-
-int SelInit(UF_UI_selection_p_t select_, void* user_data) {
-    return UF_UI_set_sel_procs(select_, SelFilter, nullptr, user_data) == 0
-               ? UF_UI_SEL_SUCCESS
-               : UF_UI_SEL_FAILURE;
-}
-
-void StartHoverProbe() {
-    int response = 0;
-    tag_t object = NULL_TAG;
-    tag_t view = NULL_TAG;
-    double cursor[3] = { 0.0, 0.0, 0.0 };
-
-    NxGeoLog::Write("hover probe: entering pick mode");
-    const int rc = UF_UI_select_with_single_dialog(
-        const_cast<char*>("悬停预览测试：把鼠标移到对象上，按 Esc 退出"),
-        nullptr, UF_UI_SEL_SCOPE_WORK_PART, SelInit, nullptr, &response, &object, cursor, &view);
-    NxGeoLog::Write("hover probe: exited rc=" + std::to_string(rc));
-}
-
-void MaybeStartHoverProbe() {
-    // 定时器上下文不是命令上下文，NX 会拒绝（rc=1190001）。
-    // 改由 ufusr（文件→执行→NX Open）触发，见 PluginEntry::RunHoverProbe。
-    (void)g_probeStarted;
-    (void)g_startTick;
 }
 
 }  // namespace
@@ -149,7 +106,6 @@ void Start() {
 
     LaunchOverlay(pid);
     g_running = true;
-    g_startTick = GetTickCount();
     NxGeoLog::Write("PluginEntry::Start ok, pid=" + std::to_string(pid));
 }
 
@@ -180,7 +136,5 @@ void Stop() {
 }
 
 bool IsRunning() { return g_running; }
-
-void RunHoverProbe() { StartHoverProbe(); }
 
 }  // namespace PluginEntry
