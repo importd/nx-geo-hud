@@ -35,14 +35,19 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <AdditionalLibraryDirectories>$(NX10_DIR)\UGOPEN;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>libnxopencpp.lib;libufun.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>libnxopencpp.lib;libnxopencpp_gateway.lib;libnxopenuicpp.lib;libufun.lib;libugopenint.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="NxQueryAdapter.cpp" />
+    <ClCompile Include="PluginEntry.cpp" />
+    <ClCompile Include="SelectionCaptureSource.cpp" />
+    <ClCompile Include="ufusr.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="NxQueryAdapter.h" />
+    <ClInclude Include="PluginEntry.h" />
+    <ClInclude Include="SelectionCaptureSource.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\NxGeo.Core\NxGeo.Core.vcxproj">

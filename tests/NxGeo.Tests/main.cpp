@@ -26,13 +26,14 @@ struct FakeSource : ICaptureSource {
     void Emit(unsigned tag) {
         ObjRef r;
         r.tag = tag;
-        r.kind = ObjKind::Face;
+        r.kind = ObjKind::Other;   // 捕获层只知道 tag，kind 由 L0 查出来
         sink(r);
     }
 };
 
 struct FakeQuery : INxQuery {
     int l0 = 0, l1 = 0, l2 = 0;
+    ObjKind lastL1Kind = ObjKind::None;
     InfoSnapshot QueryL0(const ObjRef& r) override {
         ++l0;
         InfoSnapshot s{};
@@ -41,8 +42,9 @@ struct FakeQuery : INxQuery {
         s.fields = Field_L0;
         return s;
     }
-    void FillL1(const ObjRef&, InfoSnapshot& s) override {
+    void FillL1(const ObjRef& r, InfoSnapshot& s) override {
         ++l1;
+        lastL1Kind = r.kind;
         s.area = 1.0;
         s.fields |= Field_Area;
     }
@@ -170,6 +172,7 @@ static void TestSchedulerDedupesAndDropsStale() {
     src.Emit(5);
     CHECK_EQ(q.l0, 1);   // 同一 tag 只查一次
     CHECK_EQ(q.l1, 1);
+    CHECK(q.lastL1Kind == ObjKind::Face);   // L1 必须拿到 L0 查出的真实 kind
 
     tasks.clear();
     src.Emit(7);

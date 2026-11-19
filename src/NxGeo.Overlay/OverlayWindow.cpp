@@ -25,6 +25,32 @@ std::wstring Utf8ToWide(const std::string& text) {
 
 }  // namespace
 
+namespace {
+
+struct FindWindowContext {
+    DWORD pid;
+    HWND  result;
+};
+
+BOOL CALLBACK FindMainWindowProc(HWND hwnd, LPARAM param) {
+    auto* ctx = reinterpret_cast<FindWindowContext*>(param);
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    if (pid == ctx->pid && IsWindowVisible(hwnd) && GetWindow(hwnd, GW_OWNER) == nullptr) {
+        ctx->result = hwnd;
+        return FALSE;
+    }
+    return TRUE;
+}
+
+HWND FindMainWindowForPid(DWORD pid) {
+    FindWindowContext ctx{ pid, nullptr };
+    EnumWindows(&FindMainWindowProc, reinterpret_cast<LPARAM>(&ctx));
+    return ctx.result;
+}
+
+}  // namespace
+
 LRESULT CALLBACK OverlayWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == WM_NCCREATE) {
         auto* self = reinterpret_cast<OverlayWindow*>(reinterpret_cast<CREATESTRUCTW*>(lp)->lpCreateParams);
@@ -64,6 +90,9 @@ LRESULT OverlayWindow::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
 
 bool OverlayWindow::Create(HINSTANCE instance, unsigned long long nxHwnd, int nxPid) {
     nxHwnd_ = reinterpret_cast<HWND>(nxHwnd);
+    if (!nxHwnd_ || !IsWindow(nxHwnd_)) {
+        nxHwnd_ = FindMainWindowForPid(static_cast<DWORD>(nxPid));
+    }
 
     WNDCLASSEXW wc{};
     wc.cbSize = sizeof wc;

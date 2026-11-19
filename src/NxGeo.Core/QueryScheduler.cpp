@@ -77,20 +77,22 @@ void QueryScheduler::OnRef(const ObjRef& ref) {
     lastTag_.store(ref.tag);
 
     InfoSnapshot s = query_->QueryL0(ref);
+    ObjRef resolved = ref;
+    resolved.kind = static_cast<ObjKind>(s.kind);   // L0 查出的真实类型，L1/L2 要用
     {
         std::lock_guard<std::mutex> lock(writeMutex_);
         ch_->Write(s);
     }
 
-    query_->FillL1(ref, s);
+    query_->FillL1(resolved, s);
     {
         std::lock_guard<std::mutex> lock(writeMutex_);
         ch_->Write(s);
     }
 
-    Dispatch([this, ref, s, gen]() mutable {
+    Dispatch([this, resolved, s, gen]() mutable {
         InfoSnapshot filled = s;
-        query_->FillL2(ref, filled);
+        query_->FillL2(resolved, filled);
         if (gen != gen_.load()) return;   // 早就过期了，直接丢
         std::lock_guard<std::mutex> lock(writeMutex_);
         if (gen != gen_.load()) return;
