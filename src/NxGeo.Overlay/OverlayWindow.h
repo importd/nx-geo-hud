@@ -25,6 +25,9 @@ private:
     bool ShouldStayVisible();
     HWND NxWindow();
     void CopyToClipboard();
+    void ShowTrayMenu();
+    void AddTrayIcon();
+    void RemoveTrayIcon();
 
     HWND             hwnd_ = nullptr;
     HWND             nxHwnd_ = nullptr;
@@ -41,4 +44,5 @@ private:
     int              paintedRevision_ = -1;
     int              lastX_ = INT_MIN;
     int              lastY_ = INT_MIN;
+    NOTIFYICONDATAW  tray_{};
 };

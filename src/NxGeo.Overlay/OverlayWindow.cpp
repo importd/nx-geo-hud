@@ -17,6 +17,7 @@ constexpr int kRowHeight = 18;
 constexpr int kPadding = 6;
 constexpr int kTitleWidth = 64;
 constexpr wchar_t kClassName[] = L"NxGeoOverlayWindow";
+constexpr UINT WM_TRAYICON = WM_APP + 1;
 
 // 快捷键默认值（可在 exe 同目录的 nxgeo.ini 里改，写成 "copy=Ctrl+Shift+C"）
 struct HotkeySpec {
@@ -139,6 +140,14 @@ LRESULT CALLBACK OverlayWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
 LRESULT OverlayWindow::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
         case WM_ERASEBKGND: return 1;
+        case WM_TRAYICON:
+            if (LOWORD(lp) == WM_RBUTTONUP) {
+                ShowTrayMenu();
+            } else if (LOWORD(lp) == WM_LBUTTONDBLCLK) {
+                enabled_ = !enabled_;
+                if (!enabled_) ShowWindow(hwnd_, SW_HIDE);
+            }
+            return 0;
         case WM_PAINT: {
             PAINTSTRUCT ps;
             HDC dc = BeginPaint(hwnd_, &ps);
@@ -147,21 +156,14 @@ LRESULT OverlayWindow::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         }
         case WM_HOTKEY: {
-            if (wp == 1) {
-                clickThrough_ = !clickThrough_;
-                ApplyNoActivateStyles(hwnd_, clickThrough_);
-            } else if (wp == 2) {
-                enabled_ = !enabled_;   // Ctrl+Alt+G：临时关掉/恢复
+            if (wp == 2) {              // Ctrl+Alt+G：开关浮窗
+                enabled_ = !enabled_;
                 if (!enabled_) ShowWindow(hwnd_, SW_HIDE);
-            } else if (wp == 3) {
-                CopyToClipboard();      // Ctrl+Alt+C：复制当前信息
-            } else if (wp == 4) {
-                pinned_ = !pinned_;     // Ctrl+Alt+P：钉住/取消钉住
-                if (!pinned_) ShowWindow(hwnd_, SW_HIDE);
             }
             return 0;
         }
         case WM_DESTROY:
+            RemoveTrayIcon();
             PostQuitMessage(0);
             return 0;
         default:
@@ -191,11 +193,16 @@ bool OverlayWindow::Create(HINSTANCE instance, unsigned long long nxHwnd, int nx
     if (!hwnd_) return false;
 
     ApplyNoActivateStyles(hwnd_, clickThrough_);
-    ApplyTranslucency(hwnd_, 100);
-    RegisterHotKey(hwnd_, 1, MOD_ALT, VK_OEM_3);                    // Alt+` 切换点穿
-    RegisterHotKey(hwnd_, 2, MOD_CONTROL | MOD_ALT, 'G');           // Ctrl+Alt+G 开关浮窗
-    RegisterHotKey(hwnd_, 3, MOD_CONTROL | MOD_ALT, 'C');           // Ctrl+Alt+C 复制
-    RegisterHotKey(hwnd_, 4, MOD_CONTROL | MOD_ALT, 'P');           // Ctrl+Alt+P 钉住
+    ApplyTranslucency(hwnd_, 170);
+
+    // 只保留一个快捷键：Ctrl+Alt+G 开关浮窗。
+    // 复制/钉住/点穿走托盘右键菜单，避免和 NX 抢组合键。
+    if (RegisterHotKey(hwnd_, 2, MOD_CONTROL | MOD_ALT, 'G')) {
+        NxGeoLog::Write("hotkey toggle = Ctrl+Alt+G");
+    } else {
+        NxGeoLog::Write("hotkey toggle FAILED (Ctrl+Alt+G 被占用)，请用托盘图标");
+    }
+    AddTrayIcon();
 
     if (nxHwnd_ && IsWindow(nxHwnd_)) {
         SetWindowLongPtrW(hwnd_, GWLP_HWNDPARENT, reinterpret_cast<LONG_PTR>(nxHwnd_));   // owner = NX 主窗
@@ -265,6 +272,73 @@ void OverlayWindow::Tick() {
         ShowWindow(hwnd_, SW_SHOWNOACTIVATE);
     }
     Reposition();
+}
+
+enum TrayCommand {
+    kTrayCopy = 1,
+    kTrayPin = 2,
+    kTrayClickThrough = 3,
+    kTrayHide = 4,
+    kTrayQuit = 5
+};
+
+void OverlayWindow::AddTrayIcon() {
+    tray_.cbSize = sizeof(NOTIFYICONDATAW);
+    tray_.hWnd = hwnd_;
+    tray_.uID = 1;
+    tray_.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
+    tray_.uCallbackMessage = WM_TRAYICON;
+    tray_.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
+    wcscpy_s(tray_.szTip, L"NX 几何信息浮窗（右键菜单）");
+    Shell_NotifyIconW(NIM_ADD, &tray_);
+}
+
+void OverlayWindow::RemoveTrayIcon() {
+    if (tray_.hWnd != nullptr) {
+        Shell_NotifyIconW(NIM_DELETE, &tray_);
+        tray_.hWnd = nullptr;
+    }
+}
+
+void OverlayWindow::ShowTrayMenu() {
+    POINT cursor{};
+    GetCursorPos(&cursor);
+
+    HMENU menu = CreatePopupMenu();
+    AppendMenuW(menu, MF_STRING, kTrayCopy, L"复制当前信息");
+    AppendMenuW(menu, MF_STRING | (pinned_ ? MF_CHECKED : 0), kTrayPin, L"钉住面板");
+    AppendMenuW(menu, MF_STRING | (clickThrough_ ? MF_CHECKED : 0), kTrayClickThrough, L"鼠标点穿");
+    AppendMenuW(menu, MF_STRING, kTrayHide, L"隐藏面板");
+    AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(menu, MF_STRING, kTrayQuit, L"退出");
+
+    SetForegroundWindow(hwnd_);
+    const int command = TrackPopupMenu(menu, TPM_RIGHTBUTTON | TPM_RETURNCMD,
+                                       cursor.x, cursor.y, 0, hwnd_, nullptr);
+    DestroyMenu(menu);
+
+    switch (command) {
+        case kTrayCopy:
+            CopyToClipboard();
+            break;
+        case kTrayPin:
+            pinned_ = !pinned_;
+            if (!pinned_) ShowWindow(hwnd_, SW_HIDE);
+            break;
+        case kTrayClickThrough:
+            clickThrough_ = !clickThrough_;
+            ApplyNoActivateStyles(hwnd_, clickThrough_);
+            break;
+        case kTrayHide:
+            enabled_ = false;
+            ShowWindow(hwnd_, SW_HIDE);
+            break;
+        case kTrayQuit:
+            PostQuitMessage(0);
+            break;
+        default:
+            break;
+    }
 }
 
 void OverlayWindow::CopyToClipboard() {
