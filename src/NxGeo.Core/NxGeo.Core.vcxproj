@@ -33,6 +33,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="NxGeo.Core.cpp" />
+    <ClCompile Include="SnapshotChannel.cpp" />
     <ClCompile Include="SnapshotCodec.cpp" />
     <ClCompile Include="TypeNameMap.cpp" />
   </ItemGroup>
@@ -42,6 +43,7 @@
     <ClInclude Include="NxGeoConst.h" />
     <ClInclude Include="ObjKind.h" />
     <ClInclude Include="ObjRef.h" />
+    <ClInclude Include="SnapshotChannel.h" />
     <ClInclude Include="SnapshotCodec.h" />
     <ClInclude Include="TypeNameMap.h" />
   </ItemGroup>
