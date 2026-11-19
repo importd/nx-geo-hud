@@ -1,0 +1,17 @@
+# build output
+bin/
+obj/
+x64/
+Debug/
+Release/
+*.user
+*.suo
+.vs/
+
+# superpowers scratch (ledger, briefs, review packages)
+.superpowers/
+
+# pre-existing unrelated assets in this workspace, not part of this project
+nx-agent-kit/
+rea/
+.pytest_cache/
