@@ -21,40 +21,6 @@ constexpr UINT WM_TRAYICON = WM_APP + 1;
 
 OverlayWindow* g_frozenWindow = nullptr;
 
-// 快捷键默认值（可在 exe 同目录的 nxgeo.ini 里改，写成 "copy=Ctrl+Shift+C"）
-struct HotkeySpec {
-    UINT mods = 0;
-    UINT vk = 0;
-};
-
-bool ParseHotkey(const std::string& text, HotkeySpec& out) {
-    out.mods = 0;
-    out.vk = 0;
-    if (text.empty() || text == "none") return false;
-
-    std::string token;
-    std::string rest = text;
-    while (!rest.empty()) {
-        const size_t plus = rest.find('+');
-        token = rest.substr(0, plus);
-        rest = (plus == std::string::npos) ? std::string() : rest.substr(plus + 1);
-
-        if (token == "Ctrl" || token == "CTRL" || token == "ctrl") out.mods |= MOD_CONTROL;
-        else if (token == "Shift" || token == "SHIFT" || token == "shift") out.mods |= MOD_SHIFT;
-        else if (token == "Alt" || token == "ALT" || token == "alt") out.mods |= MOD_ALT;
-        else if (token.size() == 1) {
-            char c = token[0];
-            out.vk = (c >= 'a' && c <= 'z') ? static_cast<UINT>(c - 'a' + 'A') : static_cast<UINT>(c);
-        } else if (token == "`" ) {
-            out.vk = VK_OEM_3;
-        } else if (token.size() >= 2 && (token[0] == 'F' || token[0] == 'f')) {
-            const int n = std::atoi(token.c_str() + 1);
-            if (n >= 1 && n <= 24) out.vk = VK_F1 + n - 1;
-        }
-        if (plus == std::string::npos) break;
-    }
-    return out.vk != 0;
-}
 
 std::wstring ExeDir() {
     wchar_t buffer[MAX_PATH] = { 0 };
@@ -64,32 +30,6 @@ std::wstring ExeDir() {
     return pos == std::wstring::npos ? std::wstring() : path.substr(0, pos);
 }
 
-std::string ReadIniValue(const std::wstring& iniPath, const std::string& key) {
-    std::ifstream file(iniPath);
-    std::string line;
-    while (std::getline(file, line)) {
-        if (line.empty() || line[0] == '#' || line[0] == '[') continue;
-        const size_t eq = line.find('=');
-        if (eq == std::string::npos) continue;
-        std::string name = line.substr(0, eq);
-        std::string value = line.substr(eq + 1);
-        while (!name.empty() && (name.back() == ' ' || name.back() == '\t')) name.pop_back();
-        while (!value.empty() && (value.front() == ' ' || value.front() == '\t')) value.erase(0, 1);
-        if (name == key) return value;
-    }
-    return std::string();
-}
-
-void WriteDefaultIni(const std::wstring& iniPath) {
-    if (GetFileAttributesW(iniPath.c_str()) != INVALID_FILE_ATTRIBUTES) return;
-    std::ofstream file(iniPath);
-    file << "# NX geometry overlay hotkeys. Restart NX after editing.\n";
-    file << "# Format: Ctrl/Shift/Alt + A-Z, F1-F12 or ` ; use 'none' to disable\n";
-    file << "clickthrough=Alt+`\n";
-    file << "toggle=Ctrl+Shift+G\n";
-    file << "copy=Ctrl+Shift+C\n";
-    file << "pin=Ctrl+Shift+P\n";
-}
 }  // namespace
 
 std::wstring Utf8ToWide(const std::string& text) {
@@ -236,7 +176,7 @@ bool OverlayWindow::Create(HINSTANCE instance, unsigned long long nxHwnd, int nx
                             0, 0, width_, height_, nullptr, nullptr, instance, this);
     if (!hwnd_) return false;
 
-    ApplyNoActivateStyles(hwnd_, clickThrough_);
+    ApplyNoActivateStyles(hwnd_, false);
     ApplyTranslucency(hwnd_, 170);
 
     // 只保留一个快捷键：Ctrl+Alt+G 开关浮窗。
@@ -389,9 +329,7 @@ void OverlayWindow::Tick() {
 enum TrayCommand {
     kTrayCopy = 1,
     kTrayPin = 2,
-    kTrayClickThrough = 3,
     kTrayHide = 4,
-    kTrayQuit = 5,
     kTrayFollow = 6,
     kTrayReset = 7
 };
@@ -452,11 +390,9 @@ void OverlayWindow::ShowTrayMenu() {
     HBITMAP copyIcon = IconToMenuBitmap(static_cast<HICON>(LoadImageW(nullptr, IDI_INFORMATION, IMAGE_ICON, 16, 16, LR_SHARED)));
     HBITMAP pinIcon = IconToMenuBitmap(static_cast<HICON>(LoadImageW(nullptr, IDI_APPLICATION, IMAGE_ICON, 16, 16, LR_SHARED)));
     HBITMAP hideIcon = IconToMenuBitmap(static_cast<HICON>(LoadImageW(nullptr, IDI_WARNING, IMAGE_ICON, 16, 16, LR_SHARED)));
-    HBITMAP quitIcon = IconToMenuBitmap(static_cast<HICON>(LoadImageW(nullptr, IDI_ERROR, IMAGE_ICON, 16, 16, LR_SHARED)));
     SetMenuItemBitmaps(menu, kTrayCopy, MF_BYCOMMAND, copyIcon, copyIcon);
     SetMenuItemBitmaps(menu, kTrayPin, MF_BYCOMMAND, pinIcon, pinIcon);
     SetMenuItemBitmaps(menu, kTrayHide, MF_BYCOMMAND, hideIcon, hideIcon);
-    SetMenuItemBitmaps(menu, kTrayQuit, MF_BYCOMMAND, quitIcon, quitIcon);
 
     SetForegroundWindow(hwnd_);
     NxGeoLog::Write("menu: TrackPopupMenu at " + std::to_string(cursor.x) + "," + std::to_string(cursor.y));
@@ -469,7 +405,6 @@ void OverlayWindow::ShowTrayMenu() {
     DeleteObject(copyIcon);
     DeleteObject(pinIcon);
     DeleteObject(hideIcon);
-    DeleteObject(quitIcon);
 
     switch (command) {
         case kTrayCopy:
@@ -490,10 +425,6 @@ void OverlayWindow::ShowTrayMenu() {
                 }
             }
             break;
-        case kTrayClickThrough:
-            clickThrough_ = !clickThrough_;
-            ApplyNoActivateStyles(hwnd_, clickThrough_);
-            break;
         case kTrayHide:
             enabled_ = false;
             ShowWindow(hwnd_, SW_HIDE);
@@ -511,9 +442,6 @@ void OverlayWindow::ShowTrayMenu() {
             autoPlace_ = true;
             ResetToDefaultPosition();
             SaveLayout();
-            break;
-        case kTrayQuit:
-            PostQuitMessage(0);
             break;
         default:
             break;
