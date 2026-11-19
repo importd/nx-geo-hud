@@ -65,6 +65,8 @@ private:
     POINT            dragStartCursor_{};
     RECT             dragStartRect_{};
 
+    int              appliedW_ = 0;          // 实际已生效的尺寸
+    int              appliedH_ = 0;
     int              lastX_ = INT_MIN;
     int              lastY_ = INT_MIN;
     int              paintedRevision_ = -1;

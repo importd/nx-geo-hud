@@ -262,29 +262,45 @@ void OverlayWindow::Tick() {
     }
     hideSince_ = 0;
 
-    // 固定尺寸：只有从「启动提示」切回信息面板时才需要改一次
+    // 尺寸和位置一次算好、一次下发：分两次 SetWindowPos 会看到「先缩放再跳过去」
     const int wantedWidth = kPanelWidth;
     const int wantedHeight = kToolbarHeight + kPadding * 2 + RowsForKind(snapshot.kind) * kRowHeight;
-    if (width_ != wantedWidth || height_ != wantedHeight) {
+
+    const HWND nx = NxWindow();
+    RECT nxRect{ 0, 0, 0, 0 };
+    if (nx != nullptr) GetWindowRect(nx, &nxRect);
+    if (anchorX_ == INT_MIN || anchorY_ == INT_MIN) PlaceAtCursor();
+
+    int x = anchorX_;
+    int y = anchorY_;
+    if (x < nxRect.left + 4) x = nxRect.left + 4;
+    if (y < nxRect.top + 4) y = nxRect.top + 4;
+    if (x + wantedWidth > nxRect.right - 4) x = nxRect.right - wantedWidth - 4;
+    if (y + wantedHeight > nxRect.bottom - 4) y = nxRect.bottom - wantedHeight - 4;
+    anchorX_ = x;
+    anchorY_ = y;
+
+    const bool wasVisible = IsWindowVisible(hwnd_) != FALSE;
+    const bool geometryChanged = (x != lastX_) || (y != lastY_) ||
+                                 (wantedWidth != appliedW_) || (wantedHeight != appliedH_);
+
+    if (geometryChanged) {
         width_ = wantedWidth;
         height_ = wantedHeight;
-        SetWindowPos(hwnd_, HWND_TOPMOST, 0, 0, width_, height_,
-                     SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
-        lastX_ = INT_MIN;
-        lastY_ = INT_MIN;
-        cacheRevision_ = -1;
+        lastX_ = x;
+        lastY_ = y;
+        appliedW_ = wantedWidth;
+        appliedH_ = wantedHeight;
+        cacheRevision_ = -1;   // 尺寸变了，缓存作废
+        SetWindowPos(hwnd_, HWND_TOPMOST, x, y, wantedWidth, wantedHeight,
+                     SWP_NOACTIVATE | SWP_NOOWNERZORDER);
     }
-
-    // 先定尺寸和位置，再显示并立刻画完，避免「先出现在旧位置再跳」
-    const bool wasVisible = IsWindowVisible(hwnd_) != FALSE;
-    Reposition();
 
     if (!wasVisible) {
         ShowWindow(hwnd_, SW_SHOWNOACTIVATE);
         InvalidateRect(hwnd_, nullptr, FALSE);
         UpdateWindow(hwnd_);
-    } else if (vm_.Revision() != paintedRevision_) {
-        // 尺寸可能刚变过：立刻同步重画，否则会露出一帧空白
+    } else if (geometryChanged || vm_.Revision() != paintedRevision_) {
         InvalidateRect(hwnd_, nullptr, FALSE);
         UpdateWindow(hwnd_);
     }
