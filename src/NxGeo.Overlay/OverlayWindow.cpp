@@ -415,6 +415,8 @@ void OverlayWindow::Paint(HDC target) {
         cache_ = CreateCompatibleBitmap(target, client.right, client.bottom);
         if (cacheDc_ == nullptr || cache_ == nullptr) {
             ReleaseCache();
+            RenderContent(target);   // 回退：直接画，别留一块空底
+            paintedRevision_ = revision;
             return;
         }
         const HGDIOBJ oldBitmap = SelectObject(cacheDc_, cache_);
