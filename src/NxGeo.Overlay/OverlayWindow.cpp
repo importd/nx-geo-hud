@@ -154,6 +154,7 @@ LRESULT OverlayWindow::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         case WM_LBUTTONDOWN:
             dragging_ = true;
+            autoPlace_ = false;      // 手动挪过之后就别再自动贴光标
             GetCursorPos(&dragStartCursor_);
             GetWindowRect(hwnd_, &dragStartRect_);
             SetCapture(hwnd_);
@@ -286,6 +287,17 @@ void OverlayWindow::Tick() {
             vm_.ShowMessage("协议版本不符，请重启 NX");
             break;
         case OverlayState::ShowSnapshot:
+            // 新对象：面板落到「点它的位置」右下方，之后保持不动（缩放也不跟随）
+            if (snapshot.tag != lastTag_) {
+                lastTag_ = snapshot.tag;
+                if (autoPlace_) {
+                    POINT cursor{};
+                    GetCursorPos(&cursor);
+                    anchorX_ = cursor.x + 20;
+                    anchorY_ = cursor.y + 24;
+                    followCursor_ = false;
+                }
+            }
             vm_.Apply(snapshot);
             break;
     }
@@ -297,21 +309,29 @@ void OverlayWindow::Tick() {
 
     const int wantedW = ContentWidth();
     const int wantedH = ContentHeight();
-    if (wantedW != width_ || wantedH != height_) {
+    const bool resized = (wantedW != width_ || wantedH != height_);
+    if (resized) {
         width_ = wantedW;
         height_ = wantedH;
         SetWindowPos(hwnd_, HWND_TOPMOST, 0, 0, width_, height_,
                      SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+        lastX_ = INT_MIN;   // 尺寸变了，定位要重算
+        lastY_ = INT_MIN;
     }
 
-    if (vm_.Revision() != paintedRevision_) {
+    // 顺序很重要：先把尺寸和位置定好，再显示并立刻画完，否则会「先出现在旧位置再跳」
+    const bool wasVisible = IsWindowVisible(hwnd_) != FALSE;
+    Reposition();
+
+    if (!wasVisible) {
+        ShowWindow(hwnd_, SW_SHOWNOACTIVATE);
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        UpdateWindow(hwnd_);
+    } else if (vm_.Revision() != paintedRevision_) {
         InvalidateRect(hwnd_, nullptr, FALSE);
     }
-    if (!IsWindowVisible(hwnd_)) {
-        ShowWindow(hwnd_, SW_SHOWNOACTIVATE);
-    }
-    Reposition();
 }
+
 
 enum TrayCommand {
     kTrayCopy = 1,
@@ -413,6 +433,20 @@ void OverlayWindow::ShowTrayMenu() {
         case kTrayHide:
             enabled_ = false;
             ShowWindow(hwnd_, SW_HIDE);
+            break;
+        case kTrayFollow:
+            followCursor_ = !followCursor_;
+            if (!followCursor_) {
+                autoPlace_ = true;
+                ResetToDefaultPosition();
+            }
+            SaveLayout();
+            break;
+        case kTrayReset:
+            followCursor_ = false;
+            autoPlace_ = true;
+            ResetToDefaultPosition();
+            SaveLayout();
             break;
         case kTrayQuit:
             PostQuitMessage(0);

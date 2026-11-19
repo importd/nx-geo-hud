@@ -49,6 +49,8 @@ private:
     RECT             dragStartRect_{};
     int              anchorX_ = INT_MIN;      // 固定模式的左上角
     int              anchorY_ = INT_MIN;
+    bool             autoPlace_ = true;       // 新对象时自动贴到点击位置；手动拖动后不再自动
+    unsigned         lastTag_ = 0;
     std::string      lastLogged_;
     int              paintedRevision_ = -1;
     int              lastX_ = INT_MIN;
