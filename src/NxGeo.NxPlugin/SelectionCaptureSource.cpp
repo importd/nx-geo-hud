@@ -25,36 +25,46 @@ void SelectionCaptureSource::Stop() {
 }
 
 // 实验：NX 预选（悬停高亮）会不会把对象的 highlight_status 置真。
-// 会的话就能用"每拍扫一遍体"实现悬停，不需要射线求交。
-void ProbeHighlightedBodies() {
+// 会的话就能用"每拍扫一遍"实现悬停，不需要射线求交。
+void ProbeHighlighted() {
     static std::string last;
 
     const tag_t part = UF_PART_ask_display_part();
     if (part == NULL_TAG) return;
 
-    std::string current;
+    std::string bodies;
+    std::string features;
+
+    // 体
     tag_t object = NULL_TAG;
     while (UF_OBJ_cycle_objs_in_part(part, UF_solid_type, &object) == 0 && object != NULL_TAG) {
         int type = 0;
         int subtype = 0;
         if (UF_OBJ_ask_type_and_subtype(object, &type, &subtype) != 0) continue;
-        if (subtype != 0) continue;   // 只要体
+        if (subtype != 0) continue;
 
         UF_OBJ_disp_props_t props{};
         if (UF_OBJ_ask_display_properties(object, &props) != 0) continue;
-        if (props.highlight_status) {
-            current += std::to_string(static_cast<unsigned>(object)) + " ";
-        }
+        if (props.highlight_status) bodies += std::to_string(static_cast<unsigned>(object)) + " ";
     }
 
+    // 特征：NX10 默认点选命中的就是它，预选很可能也标在它身上
+    object = NULL_TAG;
+    while (UF_OBJ_cycle_objs_in_part(part, UF_feature_type, &object) == 0 && object != NULL_TAG) {
+        UF_OBJ_disp_props_t props{};
+        if (UF_OBJ_ask_display_properties(object, &props) != 0) continue;
+        if (props.highlight_status) features += std::to_string(static_cast<unsigned>(object)) + " ";
+    }
+
+    const std::string current = "bodies=[" + bodies + "] features=[" + features + "]";
     if (current != last) {
-        NxGeoLog::Write("highlighted bodies: [" + current + "]");
+        NxGeoLog::Write("highlighted " + current);
         last = current;
     }
 }
 
 void SelectionCaptureSource::PollOnce() {
-    ProbeHighlightedBodies();
+    ProbeHighlighted();
 
     if (!sink_) return;
 
