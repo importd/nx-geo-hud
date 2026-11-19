@@ -33,16 +33,20 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="NxGeo.Core.cpp" />
+    <ClCompile Include="QueryScheduler.cpp" />
     <ClCompile Include="SnapshotChannel.cpp" />
     <ClCompile Include="SnapshotCodec.cpp" />
     <ClCompile Include="TypeNameMap.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="FieldFlags.h" />
+    <ClInclude Include="ICaptureSource.h" />
+    <ClInclude Include="INxQuery.h" />
     <ClInclude Include="InfoSnapshot.h" />
     <ClInclude Include="NxGeoConst.h" />
     <ClInclude Include="ObjKind.h" />
     <ClInclude Include="ObjRef.h" />
+    <ClInclude Include="QueryScheduler.h" />
     <ClInclude Include="SnapshotChannel.h" />
     <ClInclude Include="SnapshotCodec.h" />
     <ClInclude Include="TypeNameMap.h" />

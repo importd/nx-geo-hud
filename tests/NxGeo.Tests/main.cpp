@@ -3,13 +3,55 @@
 #include <cstring>
 #include <stdexcept>
 #include <string>
+#include <vector>
 #include <windows.h>
 
+#include "ICaptureSource.h"
+#include "INxQuery.h"
 #include "InfoSnapshot.h"
 #include "NxGeoConst.h"
+#include "QueryScheduler.h"
 #include "SnapshotChannel.h"
 #include "SnapshotCodec.h"
 #include "TypeNameMap.h"
+
+namespace {
+
+struct FakeSource : ICaptureSource {
+    std::function<void(const ObjRef&)> sink;
+    void Start(std::function<void(const ObjRef&)> s) override { sink = s; }
+    void Stop() override {}
+    void Emit(unsigned tag) {
+        ObjRef r;
+        r.tag = tag;
+        r.kind = ObjKind::Face;
+        sink(r);
+    }
+};
+
+struct FakeQuery : INxQuery {
+    int l0 = 0, l1 = 0, l2 = 0;
+    InfoSnapshot QueryL0(const ObjRef& r) override {
+        ++l0;
+        InfoSnapshot s{};
+        s.tag = r.tag;
+        s.kind = (unsigned short)ObjKind::Face;
+        s.fields = Field_L0;
+        return s;
+    }
+    void FillL1(const ObjRef&, InfoSnapshot& s) override {
+        ++l1;
+        s.area = 1.0;
+        s.fields |= Field_Area;
+    }
+    void FillL2(const ObjRef&, InfoSnapshot& s) override {
+        ++l2;
+        s.volume = 42.0;
+        s.fields |= Field_Volume;
+    }
+};
+
+}  // namespace
 
 static void TestConst() {
     CHECK_EQ(NxGeoConst::SlotSize, 512);
@@ -111,6 +153,58 @@ static void TestChannelRejectsVersionMismatch() {
     CHECK(r.VersionMismatch());
 }
 
+static void TestSchedulerDedupesAndDropsStale() {
+    std::vector<QueryScheduler::Task> tasks;
+    FakeSource src;
+    FakeQuery q;
+    std::string name = NxGeoConst::SharedMemoryName(9200 + GetCurrentProcessId() % 500);
+    SnapshotChannel ch(name, true);
+
+    QueryScheduler sch(&src, &q, &ch, [&](QueryScheduler::Task t) { tasks.push_back(t); });
+    sch.Start();
+
+    src.Emit(5);
+    src.Emit(5);
+    src.Emit(5);
+    CHECK_EQ(q.l0, 1);   // 同一 tag 只查一次
+    CHECK_EQ(q.l1, 1);
+
+    tasks.clear();
+    src.Emit(7);
+    src.Emit(8);
+
+    tasks[0]();   // tag=7 的 L2，已过期
+    InfoSnapshot afterStale{};
+    CHECK(ch.TryRead(afterStale));
+    CHECK_EQ(afterStale.tag, 8u);
+    CHECK(!HasField(afterStale.fields, Field_Volume));
+
+    tasks[1]();   // tag=8 的 L2，最新
+    InfoSnapshot afterFresh{};
+    CHECK(ch.TryRead(afterFresh));
+    CHECK_EQ(afterFresh.tag, 8u);
+    CHECK(HasField(afterFresh.fields, Field_Volume));
+
+    sch.Stop();
+}
+
+static void TestSchedulerEmitsNoneOnEmptySelection() {
+    FakeSource src;
+    FakeQuery q;
+    std::string name = NxGeoConst::SharedMemoryName(9300 + GetCurrentProcessId() % 500);
+    SnapshotChannel ch(name, true);
+
+    QueryScheduler sch(&src, &q, &ch, [](QueryScheduler::Task) {});
+    sch.Start();
+    src.Emit(0);
+
+    InfoSnapshot got{};
+    CHECK(ch.TryRead(got));
+    CHECK_EQ(static_cast<int>(got.kind), static_cast<int>(ObjKind::None));
+
+    sch.Stop();
+}
+
 int main() {
     TestConst();
     TestSnapshotRoundTrip();
@@ -118,6 +212,8 @@ int main() {
     TestTypeNameMap();
     TestChannelRoundTrip();
     TestChannelRejectsVersionMismatch();
+    TestSchedulerDedupesAndDropsStale();
+    TestSchedulerEmitsNoneOnEmptySelection();
 
     std::cout << (Check::Failures() == 0 ? "ALL PASS" : "FAILED") << "\n";
     return Check::Failures() == 0 ? 0 : 1;
