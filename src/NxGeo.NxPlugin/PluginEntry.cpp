@@ -116,16 +116,10 @@ void StartHoverProbe() {
 }
 
 void MaybeStartHoverProbe() {
-    if (g_probeStarted || g_startTick == 0) return;
-    if (GetTickCount() - g_startTick < 3000) return;
-
-    // 没有打开的零件时 UF_UI_select_with_single_dialog 会直接失败（rc=1105012）
-    const tag_t part = UF_PART_ask_display_part();
-    if (part == NULL_TAG) return;
-
-    g_probeStarted = true;
-    NxGeoLog::Write("hover probe: part=" + std::to_string(static_cast<unsigned>(part)));
-    StartHoverProbe();
+    // 定时器上下文不是命令上下文，NX 会拒绝（rc=1190001）。
+    // 改由 ufusr（文件→执行→NX Open）触发，见 PluginEntry::RunHoverProbe。
+    (void)g_probeStarted;
+    (void)g_startTick;
 }
 
 }  // namespace
@@ -186,5 +180,7 @@ void Stop() {
 }
 
 bool IsRunning() { return g_running; }
+
+void RunHoverProbe() { StartHoverProbe(); }
 
 }  // namespace PluginEntry
