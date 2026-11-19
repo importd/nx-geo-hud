@@ -52,7 +52,7 @@ InfoViewModel::InfoViewModel() {
     rows_.resize(19);
     const char* titles[19] = {
         "名称", "类型", "tag", "颜色", "图层", "包围盒", "面积", "周长", "长度",
-        "半径", "法向", "拔模角", "体积", "表面积", "质量", "距离", "特征", "组件", "备注"
+        "半径", "法向", "拔模角", "体积", "表面积", "质量", "距离", "特征", "零件", "备注"
     };
     for (int i = 0; i < 19; ++i) rows_[i].title = titles[i];
 }
@@ -112,7 +112,7 @@ void InfoViewModel::Apply(const InfoSnapshot& s) {
     if (HasField(s.fields, Field_BBox)) {
         const std::string line = Compact(s.bboxMin[0]) + "," + Compact(s.bboxMin[1]) + "," + Compact(s.bboxMin[2]) +
                                  " → " + Compact(s.bboxMax[0]) + "," + Compact(s.bboxMax[1]) + "," + Compact(s.bboxMax[2]);
-        next[5].value = line;
+        next[5].value = line + " mm";
         next[5].visible = true;
     }
 

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <windows.h>
 
@@ -34,7 +34,7 @@ private:
     int  ContentHeight() const;
     bool ShouldStayVisible();
     HWND NxWindow();
-    void SendEscapeToNx();
+    bool SendEscapeToNx();
     void PlaceAtCursor();
     void LoadLayout();
     void SaveLayout();
@@ -53,14 +53,15 @@ private:
     bool             autoPlace_ = true;      // 新对象贴在点击位置
     bool             enabled_ = true;        // Ctrl+Alt+G 总开关
     bool             dismissed_ = false;     // 点了关闭，等下一个对象
-    unsigned         dismissedTag_ = 0;
     unsigned         lastTag_ = 0;
     bool             dragging_ = false;
+    bool             dragMoved_ = false;
     POINT            dragStartCursor_{};
     RECT             dragStartRect_{};
 
     int              lastX_ = INT_MIN;
     int              lastY_ = INT_MIN;
     int              paintedRevision_ = -1;
+    int              sizedRevision_ = -1;
     std::string      lastLogged_;
 };

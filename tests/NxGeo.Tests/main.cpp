@@ -255,6 +255,38 @@ static void TestViewModelShowsOnlyFilledFields() {
     CHECK_EQ(vm.Revision(), revision);
 }
 
+// 新增字段的显示：半径/法向/拔模角/表面积/质量/距离说明，以及单位
+static void TestViewModelNewFields() {
+    InfoViewModel vm;
+
+    InfoSnapshot s{};
+    s.kind = static_cast<unsigned short>(ObjKind::Face);
+    s.tag = 7;
+    std::strncpy(s.typeName, "平面 22", sizeof s.typeName - 1);
+    s.fields = Field_L0 | Field_Radius | Field_Normal | Field_Surface | Field_Mass | Field_Distance;
+
+    s.radius = 3.5;
+    s.normal[2] = 1.0;
+    s.draftAngle = 90.0;
+    s.surfaceArea = 600.0;
+    s.mass = 0.00783;
+    s.distance = 30.0;
+    std::strncpy(s.distanceTo, "到上一个对象", sizeof s.distanceTo - 1);
+
+    vm.Apply(s);
+
+    CHECK_EQ(vm.Rows()[9].value, std::string("3.500 mm"));
+    CHECK_EQ(vm.Rows()[10].value, std::string("0.000,0.000,1.000"));
+    CHECK_EQ(vm.Rows()[11].value, std::string("90.00°"));
+    CHECK_EQ(vm.Rows()[13].value, std::string("600.000 mm²"));
+    CHECK_EQ(vm.Rows()[14].value, std::string("7.83 g"));
+    CHECK_EQ(vm.Rows()[15].value, std::string("30.0000 mm（到上一个对象）"));
+
+    s.mass = 2.5;
+    vm.Apply(s);
+    CHECK_EQ(vm.Rows()[14].value, std::string("2.500 kg"));
+}
+
 static void TestPlacementFollowsCursorAndStaysInside() {
     Placement a = ComputePlacement(500, 500, 300, 200, 0, 0, 1920, 1080);
     CHECK_EQ(a.x, 516);   // 光标右下 16px
@@ -425,6 +457,7 @@ int main() {
     TestSchedulerCanRestart();
     TestSchedulerEmitsNoneOnEmptySelection();
     TestViewModelShowsOnlyFilledFields();
+    TestViewModelNewFields();
     TestViewModelMessageReplacesRows();
     TestPlacementFollowsCursorAndStaysInside();
     TestPlacementWhenPanelIsWiderThanWindow();

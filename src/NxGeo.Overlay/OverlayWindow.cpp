@@ -212,7 +212,11 @@ void OverlayWindow::Tick() {
         return;
     }
 
-    const int wantedW = ContentWidth();
+    if (sizedRevision_ != vm_.Revision()) {
+        width_ = ContentWidth();
+        sizedRevision_ = vm_.Revision();
+    }
+    const int wantedW = width_;
     const int wantedH = ContentHeight();
     if (wantedW != width_ || wantedH != height_) {
         width_ = wantedW;
@@ -247,6 +251,8 @@ HWND OverlayWindow::NxWindow() {
 }
 
 bool OverlayWindow::ShouldStayVisible() {
+    if (dragging_) return true;      // 拖动时不要因为光标跑出 NX 就藏起来
+
     const HWND nx = NxWindow();
     if (nx == nullptr) return false;
 
@@ -262,15 +268,15 @@ bool OverlayWindow::ShouldStayVisible() {
 }
 
 // 给 NX 的焦点窗口投递 Esc：NX 自己清空选择与高亮，等价于它的「取消选择」
-void OverlayWindow::SendEscapeToNx() {
+bool OverlayWindow::SendEscapeToNx() {
     const HWND nx = NxWindow();
-    if (nx == nullptr) return;
+    if (nx == nullptr) return false;
 
     // 护栏：有命令对话框开着就不发，避免把用户正在做的命令取消掉
     const int windows = CountNxTopLevelWindows(nxPid_);
     if (windows > 1) {
         NxGeoLog::Write("deselect: blocked, NX busy (top-level windows=" + std::to_string(windows) + ")");
-        return;
+        return false;
     }
 
     DWORD pid = 0;
@@ -285,6 +291,7 @@ void OverlayWindow::SendEscapeToNx() {
     PostMessageW(target, WM_KEYDOWN, VK_ESCAPE, 0x00000001);
     PostMessageW(target, WM_KEYUP, VK_ESCAPE, 0xC0000001);
     NxGeoLog::Write("deselect: posted ESC to NX");
+    return true;
 }
 
 void OverlayWindow::LoadLayout() {
@@ -462,9 +469,10 @@ int OverlayWindow::ToolbarHit(int x, int y) const {
 
 void OverlayWindow::PerformToolbarAction(int index) {
     switch (index) {
-        case 0:   // 取消选择：让 NX 自己按 Esc
-            SendEscapeToNx();
-            ShowWindow(hwnd_, SW_HIDE);
+        case 0:   // 取消选择：让 NX 自己按 Esc；没发出去就什么也不做
+            if (SendEscapeToNx()) {
+                ShowWindow(hwnd_, SW_HIDE);
+            }
             break;
         case 1:   // 移动：进入拖动
             dragging_ = true;
@@ -480,7 +488,6 @@ void OverlayWindow::PerformToolbarAction(int index) {
             break;
         case 3:   // 关闭：隐藏到下一个对象
             dismissed_ = true;
-            dismissedTag_ = lastTag_;
             ShowWindow(hwnd_, SW_HIDE);
             break;
         default:
@@ -530,7 +537,7 @@ LRESULT OverlayWindow::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
                 return 0;
             }
             dragging_ = true;
-            autoPlace_ = false;         // 手动挪过之后，新对象就在这个位置出现
+            dragMoved_ = false;
             GetCursorPos(&dragStartCursor_);
             GetWindowRect(hwnd_, &dragStartRect_);
             SetCapture(hwnd_);
@@ -540,6 +547,8 @@ LRESULT OverlayWindow::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
             if (dragging_) {
                 POINT now{};
                 GetCursorPos(&now);
+                dragMoved_ = true;
+                autoPlace_ = false;      // 真正拖过，之后新对象就在这个位置出现
                 const int x = dragStartRect_.left + (now.x - dragStartCursor_.x);
                 const int y = dragStartRect_.top + (now.y - dragStartCursor_.y);
                 anchorX_ = x;
@@ -554,7 +563,7 @@ LRESULT OverlayWindow::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
             if (dragging_) {
                 dragging_ = false;
                 ReleaseCapture();
-                SaveLayout();
+                if (dragMoved_) SaveLayout();
             }
             return 0;
         case WM_DESTROY:

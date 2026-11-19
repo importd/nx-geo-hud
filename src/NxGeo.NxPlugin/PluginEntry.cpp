@@ -1,4 +1,4 @@
-#include "PluginEntry.h"
+﻿#include "PluginEntry.h"
 
 #include <windows.h>
 
@@ -62,6 +62,10 @@ void LaunchOverlay(int pid) {
     if (g_overlayProcess != nullptr) CloseHandle(g_overlayProcess);
     g_overlayProcess = pi.hProcess;   // 留给看门狗检查
 
+    if (g_job != nullptr) {
+        CloseHandle(g_job);
+        g_job = nullptr;
+    }
     g_job = CreateJobObjectW(nullptr, nullptr);
     if (g_job) {
         JOBOBJECT_EXTENDED_LIMIT_INFORMATION info{};

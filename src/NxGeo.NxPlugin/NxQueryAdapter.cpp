@@ -175,15 +175,20 @@ InfoSnapshot NxQueryAdapter::QueryL0(const ObjRef& r) {
                         }
                         name = std::string(FaceTypeName(surfType)) + " " + std::to_string(surfType) + extra;
 
-                        // 法向 + 拔模角（相对 +Z，即默认开模方向）
-                        s.normal[0] = dir[0];
-                        s.normal[1] = dir[1];
-                        s.normal[2] = dir[2];
-                        double dz = dir[2];
-                        if (dz > 1.0) dz = 1.0;
-                        if (dz < -1.0) dz = -1.0;
-                        s.draftAngle = 90.0 - std::acos(dz) * 57.29577951308232;
-                        s.fields |= Field_Normal;
+                        // 只有「有界平面」的 dir 才是法向；圆柱/圆锥/圆环/拉伸面返回的是轴线，
+                        // 球面未定义。宁可不给，也不能把轴线当法向算出假的拔模角。
+                        if (surfType == 22) {
+                            const double sign = (normDir < 0) ? -1.0 : 1.0;
+                            s.normal[0] = dir[0] * sign;
+                            s.normal[1] = dir[1] * sign;
+                            s.normal[2] = dir[2] * sign;
+
+                            double nz = s.normal[2];
+                            if (nz > 1.0) nz = 1.0;
+                            if (nz < -1.0) nz = -1.0;
+                            s.draftAngle = 90.0 - std::acos(nz) * 57.29577951308232;
+                            s.fields |= Field_Normal;
+                        }
                     }
 
                     // 生成该面的特征

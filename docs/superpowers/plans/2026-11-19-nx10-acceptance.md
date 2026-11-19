@@ -1,17 +1,17 @@
-# NX10 几何信息悬浮窗 使用与验收（当前版本）
+# NX10 几何信息悬浮窗 使用与验收
 
-> 位置：`E:\nxgeo`（源码 + 构建）；安装目录：`%UGII_USER_DIR%\startup`
-> 更新：2026-11-19 22:12
+> 源码 + 构建：`E:\nxgeo`；安装目录：`%UGII_USER_DIR%\startup`
+> 更新：2026-11-19 23:00（对应 commit `d7be0ee` 之后的修复）
 
 ## 1. 安装
 
 ```
-build.cmd
-install\install.cmd -UserDir "<UGII_USER_DIR>"     # 用 .cmd，.ps1 会被执行策略拦
+build.cmd                                         # 编译并跑单元测试
+install\install.cmd -UserDir "<UGII_USER_DIR>"    # 用 .cmd，.ps1 会被执行策略拦
 重启 NX10
 ```
 
-产物：`NxGeo.NxPlugin.dll`（NX 启动加载）+ `nxgeo-overlay.exe`（插件拉起）+ `nxgeo.ini`（可选，自定义快捷键）
+产物：`NxGeo.NxPlugin.dll`（NX 启动加载）+ `nxgeo-overlay.exe`（插件拉起，看门狗会重启它）
 
 ## 2. 能显示什么
 
@@ -20,44 +20,70 @@ install\install.cmd -UserDir "<UGII_USER_DIR>"     # 用 .cmd，.ps1 会被执�
 | 字段 | 来源 | 适用 |
 |---|---|---|
 | 名称 | `UF_OBJ_ask_name` | 全部 |
-| 类型 | 特征 `UF_MODL_ask_feat_type`；面 `UF_MODL_ask_face_data`（含半径/半角）；边 `UF_MODL_ask_edge_type` | 全部 |
+| 类型 | 特征 `UF_MODL_ask_feat_type`；面 `UF_MODL_ask_face_data`（子类型 + 半径/半角 + 类型号）；边 `UF_MODL_ask_edge_type` | 全部 |
 | tag / 颜色 / 图层 | `UF_OBJ_ask_display_properties` | 全部 |
-| 包围盒 | `UF_MODL_ask_bounding_box` | 全部 |
-| 面积 / 周长 | NXOpen Measure | 面 |
-| 长度 | NXOpen Measure | 边/曲线 |
-| 半径 | `UF_EVAL_ask_arc` | 圆弧边 |
-| 法向 / 拔模角 | `UF_MODL_ask_face_data` + 相对 +Z | 面 |
-| 体积 / 表面积 / 质量 | `UF_MODL_ask_mass_props_3d` | 体 |
-| 距离（到上一个对象） | `UF_MODL_ask_minimum_dist_2` | 全部，且需要先选过另一个对象 |
+| 包围盒 (mm) | `UF_MODL_ask_bounding_box` | 全部 |
+| 面积 (mm²) / 周长 (mm) | NXOpen Measure | 面 |
+| 长度 (mm) | NXOpen Measure | 边/曲线 |
+| 半径 (mm) | `UF_EVAL_ask_arc` | 圆弧边 |
+| 法向 / 拔模角 | `UF_MODL_ask_face_data` + `norm_dir` | **仅平面**（其它面型 `dir` 是轴线，不显示） |
+| 体积 (mm³) / 表面积 (mm²) / 质量 (g/kg) | `UF_MODL_ask_mass_props_3d` | 体（特征按其生成的体） |
+| 距离 (mm) | `UF_MODL_ask_minimum_dist_2` | 全部，需先选过另一个对象；注解「（到上一个对象）」 |
 | 特征 | `UF_MODL_ask_face_feats` / `ask_edge_feats` | 面/边 |
-| 组件 | `UF_OBJ_ask_owning_part` + `UF_PART_ask_part_name` | 装配 occurrence |
+| 零件 | `UF_OBJ_ask_owning_part` + `UF_PART_ask_part_name` | 装配 occurrence（显示零件文件名，不是实例名） |
 
 ## 3. 交互
 
-| 操作 | 效果 |
-|---|---|
-| `Ctrl+Alt+G` | 开关浮窗（唯一全局快捷键） |
-| 面板上**右键** | 菜单：复制信息 / 钉住面板 / 鼠标点穿 / 隐藏面板 / 退出 |
-| 托盘图标右键 | 同一个菜单 |
-| 托盘图标双击 | 开关浮窗 |
-| 鼠标移到面板上 | 面板冻结位置（否则永远点不到） |
+面板顶部一条工具条，右侧 4 个图标（从左到右）：
+
+| 图标 | 作用 | 说明 |
+|---|---|---|
+| 圆圈斜杠 | 取消选择 | 给 NX 的焦点窗口投递 Esc，由 NX 自己清空选择与高亮；**NX 有命令对话框时不发送**（判据：该 pid 可见顶层窗口 > 1） |
+| 四向箭头 | 移动 | 按住拖动；拖过之后才改变定位模式 |
+| 回转箭头 | 复位 | 回到「新对象出现在点击位置」的默认定位 |
+| 红叉 | 关闭 | 隐藏，直到选中下一个对象（不会永久消失） |
+
+**定位规则：**
+
+- 默认：新对象 → 面板出现在**点击位置**右下方（+20/+24）
+- 拖动后：新对象 → 面板出现在**你拖到的位置**
+- 按复位：新对象 → 又回到点击位置
+- 位置与模式存在 exe 同目录的 `nxgeo.layout`（`x y autoPlace`），重启 NX 后保持
+
+**全局快捷键：只有一个 `Ctrl+Alt+G`**，开关整个浮窗。其它操作全部在工具条上。
 
 ## 4. 已知限制
 
-- **没有 hover**：NX10 无「不进命令状态」的悬停回调（详见 `docs/backlog/2026-11-19-reverse-mosheng-hover.md` 的实测排除记录）。当前是「选中即显示」。
-- 多选只显示**最新选中**的那个。
-- 距离只到「上一个选中的对象」，不支持指定方向/投影距离。
-- 质量按 NX 质量属性（kg），小于 1 kg 显示为 g。
-- 拔模角固定相对 +Z，不跟随自定义开模方向。
-- 只处理工作部件；装配下的组件名只在 occurrence 上显示。
+- **没有 hover**：NX10 没有「不进命令状态」的悬停回调，实测排除 4 种方案，记录见 `docs/backlog/2026-11-19-reverse-mosheng-hover.md`。当前是「选中即显示」。
+- 多选只显示**最新选中**的对象。
+- 距离只有「到上一个对象」的最小距离，不支持方向/投影距离。
+- 拔模角固定相对 +Z，且只对平面给出（曲面不显示）。
+- 「取消选择」靠向 NX 投递 Esc 实现：若 NX 判据误判为忙，按钮不动作（日志有 `deselect: blocked`）。
+- 「零件」显示的是零件文件名；同一零件多次装配时无法区分实例。
+- 只处理工作部件。
 - 协议版本 v5：插件与浮窗必须同版本，否则浮窗显示「协议版本不符」。
 
-## 5. 排障
+## 5. 验收记录
+
+| # | 项 | 期望 | 结果 |
+|---|---|---|---|
+| 1 | 选块特征 | 类型 `特征·BLOCK`、tag 为特征 tag、有体积/表面积/质量 | 待填 |
+| 2 | 选平面 | 类型 `平面 22`、面积/周长、法向 `0,0,1`、拔模角 90° | 待填 |
+| 3 | 选圆柱面 | 类型 `圆柱面 16 R=…`、面积/周长、**无法向行** | 待填 |
+| 4 | 选圆弧边 | 类型 `圆弧边 3002`、长度、半径 | 待填 |
+| 5 | 选两条边 | 第二个带距离 + 「（到上一个对象）」 | 待填 |
+| 6 | 选两个体 | 距离为两体最小间距 | 待填 |
+| 7 | 拖动面板 | 之后新对象出现在拖动位置 | 待填 |
+| 8 | 复位 | 新对象回到点击位置 | 待填 |
+| 9 | 空闲点取消选择 | NX 高亮消失 | 待填 |
+| 10 | 开命令后点取消选择 | 什么都不发生，日志 `deselect: blocked` | 待填 |
+
+## 6. 排障
 
 | 现象 | 先看 |
 |---|---|
-| 没浮窗 | `%TEMP%\nxgeo.log` 有没有 `ufsta` 行；没有 = 插件没加载 |
-| 浮窗不显示 | 日志 `tick: state=0` = 空选择；`state=2 stay=0` = 前台/光标判断 |
-| 右键无菜单 | 日志有没有 `menu: WM_RBUTTONUP received` |
-| 快捷键无效 | 日志 `hotkey toggle FAILED` = 被 NX 占用，改用托盘 |
-| 字段缺失 | 日志 `poll: count=… newest=…`，再对照第 2 节的适用对象 |
+| 没浮窗 | `%TEMP%\nxgeo.log` 有没有 `overlay created`；没有 = 插件没加载或启动失败 |
+| 浮窗不显示 | `tick: state=0` = 空选择 |
+| 工具条点了没反应 | 日志 `deselect: blocked`（NX 忙）或面板未获得焦点 |
+| 快捷键无效 | 日志 `hotkey toggle FAILED`（Ctrl+Alt+G 被占用） |
+| 字段缺失 | 对照第 2 节「适用」列；法向/拔模角只有平面有 |
