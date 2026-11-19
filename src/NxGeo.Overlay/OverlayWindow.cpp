@@ -149,6 +149,7 @@ LRESULT OverlayWindow::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
             }
             return 0;
         case WM_RBUTTONUP:
+            NxGeoLog::Write("menu: WM_RBUTTONUP received");
             ShowTrayMenu();          // 面板上右键也出同一个菜单
             return 0;
         case WM_PAINT: {
@@ -204,6 +205,12 @@ bool OverlayWindow::Create(HINSTANCE instance, unsigned long long nxHwnd, int nx
         NxGeoLog::Write("hotkey toggle = Ctrl+Alt+G");
     } else {
         NxGeoLog::Write("hotkey toggle FAILED (Ctrl+Alt+G 被占用)，请用托盘图标");
+    }
+    {
+        const LONG_PTR ex = GetWindowLongPtrW(hwnd_, GWL_EXSTYLE);
+        NxGeoLog::Write(std::string("overlay style: TRANSPARENT=") +
+                        ((ex & WS_EX_TRANSPARENT) ? "1" : "0") + " NOACTIVATE=" +
+                        ((ex & WS_EX_NOACTIVATE) ? "1" : "0"));
     }
     AddTrayIcon();
 
@@ -348,9 +355,12 @@ void OverlayWindow::ShowTrayMenu() {
     SetMenuItemBitmaps(menu, kTrayQuit, MF_BYCOMMAND, quitIcon, quitIcon);
 
     SetForegroundWindow(hwnd_);
+    NxGeoLog::Write("menu: TrackPopupMenu at " + std::to_string(cursor.x) + "," + std::to_string(cursor.y));
     const int command = TrackPopupMenu(menu, TPM_RIGHTBUTTON | TPM_RETURNCMD,
                                        cursor.x, cursor.y, 0, hwnd_, nullptr);
+    PostMessageW(hwnd_, WM_NULL, 0, 0);   // NOACTIVATE 窗口的经典修正：否则菜单会立刻消失
     DestroyMenu(menu);
+    NxGeoLog::Write("menu: command=" + std::to_string(command));
 
     DeleteObject(copyIcon);
     DeleteObject(pinIcon);
