@@ -116,23 +116,8 @@ bool OverlayWindow::Create(HINSTANCE instance, unsigned long long nxHwnd, int nx
 }
 
 void OverlayWindow::ShowNotice() {
-    const std::wstring text = L"几何预览开启（Ctrl+Alt+G 关闭/开启）";
-
-    HFONT font = CreateFontW(-13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-                             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                             CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Microsoft YaHei UI");
-    SIZE size{};
-    HDC screen = GetDC(hwnd_);
-    if (screen != nullptr) {
-        HGDIOBJ oldFont = SelectObject(screen, font);
-        GetTextExtentPoint32W(screen, text.c_str(), static_cast<int>(text.size()), &size);
-        SelectObject(screen, oldFont);
-        ReleaseDC(hwnd_, screen);
-    }
-    DeleteObject(font);
-
-    const int width = size.cx + kPadding * 4;
-    const int height = kToolbarHeight + kPadding * 2;
+    const int width = 300;
+    const int height = 36;
 
     const HWND nx = NxWindow();
     RECT nxRect{ 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN) };
@@ -359,6 +344,15 @@ void OverlayWindow::RenderContent(HDC dc) {
     HBRUSH background = CreateSolidBrush(RGB(28, 28, 30));
     FillRect(dc, &client, background);
     DeleteObject(background);
+
+    {
+        int visible = 0;
+        for (const auto& row : vm_.Rows()) { if (row.visible) ++visible; }
+        NxGeoLog::Write("render: " + std::to_string(client.right) + "x" + std::to_string(client.bottom) +
+                        " notice=" + (showingNotice_ ? "1" : "0") +
+                        " rev=" + std::to_string(vm_.Revision()) +
+                        " rows=" + std::to_string(visible));
+    }
 
     if (showingNotice_) {   // 启动提示：只有一行居中文字
         const std::wstring text = L"几何预览开启（Ctrl+Alt+G 关闭/开启）";
