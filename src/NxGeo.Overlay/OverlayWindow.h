@@ -56,6 +56,9 @@ private:
     bool             enabled_ = true;        // Ctrl+Alt+G 总开关
     bool             dismissed_ = false;     // 点了关闭，等下一个对象
     unsigned         lastTag_ = 0;
+    int              hoverButton_ = -1;      // 悬停的按钮下标
+    int              pressedButton_ = -1;    // 按下的按钮下标
+    bool             trackingLeave_ = false;
     bool             dragging_ = false;
     bool             dragMoved_ = false;
     POINT            dragStartCursor_{};

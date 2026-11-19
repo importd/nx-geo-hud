@@ -16,7 +16,8 @@
 
 namespace {
 
-constexpr int kRowHeight = 18;
+constexpr int kFontHeight = 15;   // 字号（负数传给 CreateFontW）
+constexpr int kRowHeight = 21;
 constexpr int kPadding = 6;
 constexpr int kTitleWidth = 64;
 constexpr int kToolbarHeight = 20;
@@ -24,8 +25,8 @@ constexpr int kButton = 16;
 constexpr int kButtonGap = 2;
 constexpr int kButtonCount = 2;          // 复位 / 关闭
 // 固定窗口尺寸：不做内容自适应，避免内容分 L0/L1/L2 三步到达时窗口「一点点长大」
-constexpr int kPanelWidth = 340;
-constexpr int kPanelHeight = 20 + 6 * 2 + 12 * 18;   // 工具条 + 上边距 + 最多 12 行
+constexpr int kPanelWidth = 380;
+constexpr int kPanelHeight = 20 + 6 * 2 + 12 * 21;  // 工具条 + 上边距 + 最多 12 行
 constexpr wchar_t kClassName[] = L"NxGeoOverlayWindow";
 constexpr BYTE kAlpha = 170;
 
@@ -360,7 +361,7 @@ void OverlayWindow::RenderContent(HDC dc) {
 
     if (showingNotice_) {   // 启动提示：只有一行居中文字
         const std::wstring text = L"几何预览开启（Ctrl+Alt+G 关闭/开启）";
-        HFONT noticeFont = CreateFontW(-13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        HFONT noticeFont = CreateFontW(-kFontHeight, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
                                        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                                        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Microsoft YaHei UI");
         HGDIOBJ oldFont = SelectObject(dc, noticeFont);
@@ -375,7 +376,7 @@ void OverlayWindow::RenderContent(HDC dc) {
 
     DrawToolbar(dc);
 
-    HFONT font = CreateFontW(-13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+    HFONT font = CreateFontW(-kFontHeight, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
                              DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                              CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Microsoft YaHei UI");
     HGDIOBJ oldFont = SelectObject(dc, font);
@@ -457,6 +458,14 @@ void OverlayWindow::DrawToolbar(HDC dc) {
         const int x = startX + i * (kButton + kButtonGap);
         const int cx = x + kButton / 2;      // 按钮中心，所有图元都按中心定位
         const int cy = y + kButton / 2;
+
+        // 点击反馈：悬停浅一点，按下更深
+        if (i == pressedButton_ || i == hoverButton_) {
+            RECT box{ x, y, x + kButton, y + kButton };
+            HBRUSH hover = CreateSolidBrush((i == pressedButton_) ? RGB(84, 84, 94) : RGB(52, 52, 60));
+            FillRect(dc, &box, hover);
+            DeleteObject(hover);
+        }
 
         switch (i) {
             case 0: {  // 复位：开口圆环 + 箭头
@@ -561,7 +570,10 @@ LRESULT OverlayWindow::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
         case WM_LBUTTONDOWN: {
             const int hit = ToolbarHit(GET_X_LPARAM(lp), GET_Y_LPARAM(lp));
             if (hit >= 0) {
-                PerformToolbarAction(hit);
+                pressedButton_ = hit;      // 先给按下反馈，抬起时再执行
+                cacheRevision_ = -1;
+                InvalidateRect(hwnd_, nullptr, FALSE);
+                UpdateWindow(hwnd_);
                 return 0;
             }
             dragging_ = true;
@@ -571,7 +583,18 @@ LRESULT OverlayWindow::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
             SetCapture(hwnd_);
             return 0;
         }
-        case WM_MOUSEMOVE:
+        case WM_MOUSEMOVE: {
+            if (!trackingLeave_) {
+                TRACKMOUSEEVENT track{ sizeof(TRACKMOUSEEVENT), TME_LEAVE, hwnd_, 0 };
+                TrackMouseEvent(&track);
+                trackingLeave_ = true;
+            }
+            const int over = ToolbarHit(GET_X_LPARAM(lp), GET_Y_LPARAM(lp));
+            if (over != hoverButton_) {
+                hoverButton_ = over;
+                cacheRevision_ = -1;
+                InvalidateRect(hwnd_, nullptr, FALSE);
+            }
             if (dragging_) {
                 POINT now{};
                 GetCursorPos(&now);
@@ -587,7 +610,25 @@ LRESULT OverlayWindow::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
                              SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
             }
             return 0;
+        }
+        case WM_MOUSELEAVE:
+            trackingLeave_ = false;
+            if (hoverButton_ != -1) {
+                hoverButton_ = -1;
+                cacheRevision_ = -1;
+                InvalidateRect(hwnd_, nullptr, FALSE);
+            }
+            return 0;
         case WM_LBUTTONUP:
+            if (pressedButton_ >= 0) {
+                const int hit = ToolbarHit(GET_X_LPARAM(lp), GET_Y_LPARAM(lp));
+                const int pressed = pressedButton_;
+                pressedButton_ = -1;
+                cacheRevision_ = -1;
+                InvalidateRect(hwnd_, nullptr, FALSE);
+                if (hit == pressed) PerformToolbarAction(pressed);
+                return 0;
+            }
             if (dragging_) {
                 dragging_ = false;
                 ReleaseCapture();
