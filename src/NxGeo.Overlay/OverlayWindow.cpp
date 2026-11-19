@@ -213,10 +213,43 @@ bool OverlayWindow::Create(HINSTANCE instance, unsigned long long nxHwnd, int nx
     return true;
 }
 
+namespace {
+
+struct TopLevelCount {
+    DWORD pid;
+    int   count;
+};
+
+BOOL CALLBACK CountTopLevelProc(HWND hwnd, LPARAM param) {
+    auto* context = reinterpret_cast<TopLevelCount*>(param);
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    if (pid == context->pid && IsWindowVisible(hwnd)) {
+        ++context->count;
+    }
+    return TRUE;
+}
+
+// NX 空闲时只有主框架一个可见顶层窗口；有命令对话框时会多出来
+int CountNxTopLevelWindows(DWORD pid) {
+    TopLevelCount context{ pid, 0 };
+    EnumWindows(&CountTopLevelProc, reinterpret_cast<LPARAM>(&context));
+    return context.count;
+}
+
+}  // namespace
 // 给 NX 的焦点窗口投递一个 Esc：NX 自己会清空选择/高亮，等于它的"取消选择"
 void OverlayWindow::SendEscapeToNx() {
     const HWND nx = NxWindow();
     if (nx == nullptr) return;
+
+    // 护栏：有命令对话框开着就不发，避免把用户正在做的命令取消掉
+    const int windows = CountNxTopLevelWindows(nxPid_);
+    if (windows > 1) {
+        NxGeoLog::Write("deselect: blocked, NX looks busy (top-level windows=" +
+                        std::to_string(windows) + ")");
+        return;
+    }
 
     DWORD pid = 0;
     const DWORD threadId = GetWindowThreadProcessId(nx, &pid);
