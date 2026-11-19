@@ -125,18 +125,25 @@ InfoSnapshot NxQueryAdapter::QueryL0(const ObjRef& r) {
         int subtype = 0;
         if (UF_OBJ_ask_type_and_subtype(t0, &type, &subtype) == 0) {
             if (type == UF_feature_type) {
-                // NX10 在无命令状态下点选，拿到的是特征而不是体/面/边：
-                // 映射到该特征生成的体，后续按体处理。
+                // 选中特征是常见的（NX 默认点选就选特征），要显示特征本身，
+                // 同时把它的体存到 bodyTag 上供包围盒/体积/质量使用。
+                char* featureType = nullptr;
+                std::string label = "特征";
+                if (UF_MODL_ask_feat_type(t0, &featureType) == 0 && featureType != nullptr) {
+                    label = std::string("特征·") + featureType;
+                    UF_free(featureType);
+                }
+                s.kind = static_cast<unsigned short>(ObjKind::Body);
+                std::strncpy(s.typeName, label.c_str(), sizeof s.typeName - 1);
+
                 tag_t body = NULL_TAG;
                 if (UF_MODL_ask_feat_body(t0, &body) == 0 && body != NULL_TAG) {
                     t = body;
-                    s.tag = static_cast<unsigned>(body);
+                    s.bodyTag = static_cast<unsigned>(body);
                     if (s.objectName[0] == '\0') {
                         ReadObjectName(body, s.objectName, sizeof s.objectName);
                     }
                 }
-                s.kind = static_cast<unsigned short>(ObjKind::Body);
-                std::strncpy(s.typeName, "实体(来自特征)", sizeof s.typeName - 1);
             } else {
                 s.kind = static_cast<unsigned short>(TypeNameMap::KindOf(type, subtype));
                 std::string name = TypeNameMap::NameOf(type, subtype);
@@ -323,7 +330,7 @@ void NxQueryAdapter::FillL1(const ObjRef& r, InfoSnapshot& s) {
 
 void NxQueryAdapter::FillL2(const ObjRef& r, InfoSnapshot& s) {
 
-    const tag_t handle = static_cast<tag_t>(s.tag != 0 ? s.tag : r.tag);
+    const tag_t handle = static_cast<tag_t>(s.bodyTag != 0 ? s.bodyTag : s.tag);
     const ObjKind kind = static_cast<ObjKind>(s.kind);
 
     try {

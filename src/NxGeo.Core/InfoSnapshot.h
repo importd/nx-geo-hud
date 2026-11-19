@@ -11,6 +11,7 @@ struct InfoSnapshot {
     unsigned short     kind = 0;
     unsigned long long gen = 0;
     unsigned           tag = 0;
+    unsigned           bodyTag = 0;   // 特征映射出的体（测量用），没有则 0
     unsigned           fields = Field_None;
 
     char               objectName[64] = { 0 };
