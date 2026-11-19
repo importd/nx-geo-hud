@@ -231,9 +231,19 @@ void OverlayWindow::Tick() {
         }
     }
 
+    // 关键：NX 点击新对象时会先清空选择、再选中，中间会出现一个「空快照」。
+    // 立刻隐藏就会看到面板整块闪一下，所以空状态也给宽限期。
+    const bool wantVisible = (state != OverlayState::Hide) && ShouldStayVisible();
+    if (!wantVisible) {
+        if (hideSince_ == 0) hideSince_ = GetTickCount();
+        if (GetTickCount() - hideSince_ < 300) return;   // 宽限期内保持现状
+        ShowWindow(hwnd_, SW_HIDE);
+        return;
+    }
+    hideSince_ = 0;
+
     switch (state) {
         case OverlayState::Hide:
-            ShowWindow(hwnd_, SW_HIDE);
             return;
         case OverlayState::ShowMessage:
             vm_.ShowMessage("协议版本不符，请重启 NX");
@@ -253,14 +263,6 @@ void OverlayWindow::Tick() {
         }
     }
 
-    if (!ShouldStayVisible()) {
-        // NX 点击的瞬间前台会短暂抖动，连续不可见 250ms 才真的隐藏，否则会闪一下
-        if (hideSince_ == 0) hideSince_ = GetTickCount();
-        if (GetTickCount() - hideSince_ < 250) return;
-        ShowWindow(hwnd_, SW_HIDE);
-        return;
-    }
-    hideSince_ = 0;
 
     // 尺寸和位置一次算好、一次下发：分两次 SetWindowPos 会看到「先缩放再跳过去」
     const int wantedWidth = kPanelWidth;
