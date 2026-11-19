@@ -1,10 +1,11 @@
 #pragma once
 
-#include <windows.h>
-
+#include <cstdlib>
 #include <string>
 
-// 极简日志：NX 里出问题时至少有一条可查的线索（%TEMP%\nxgeo.log）。
+#include <windows.h>
+
+// 极简日志：插件和浮窗共用一份（%TEMP%\nxgeo.log）。
 namespace NxGeoLog {
 
 inline void Write(const std::string& text) {

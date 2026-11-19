@@ -28,6 +28,7 @@ public:
     void      SetNxHwnd(long long hwnd);
     void      SetNxPid(int pid);
     long long NxHwnd() const;
+    bool      IsValid() const { return header_ != nullptr; }
 
     unsigned long long Write(const InfoSnapshot& s);
     bool               TryRead(InfoSnapshot& out) const;

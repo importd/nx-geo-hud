@@ -74,6 +74,8 @@ void Start() {
     g_channel = new SnapshotChannel(NxGeoConst::SharedMemoryName(pid), true);
     g_channel->SetNxPid(pid);
     g_channel->SetNxHwnd(static_cast<long long>(reinterpret_cast<ULONG_PTR>(GetForegroundWindow())));
+    NxGeoLog::Write(std::string("channel ") + (g_channel->IsValid() ? "ok " : "FAILED ") +
+                    NxGeoConst::SharedMemoryName(pid));
 
     g_query = new NxQueryAdapter();
     g_source = new SelectionCaptureSource();

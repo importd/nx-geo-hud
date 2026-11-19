@@ -2,6 +2,8 @@
 
 #include <windows.h>
 
+#include <string>
+
 #include "InfoViewModel.h"
 #include "SnapshotChannel.h"
 
@@ -31,4 +33,5 @@ private:
     int              height_ = 120;
     bool             clickThrough_ = true;
     bool             enabled_ = true;
+    std::string      lastLogged_;
 };

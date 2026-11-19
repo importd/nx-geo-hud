@@ -2,6 +2,13 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $msbuild = 'C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\MSBuild\Current\Bin\MSBuild.exe'
 
+# Use a workspace-local temp dir: the system %TEMP% can lose its sandbox ACLs,
+# and then cl.exe cannot create its temporary files.
+$tempDir = Join-Path $root '.temp'
+New-Item -ItemType Directory -Force $tempDir | Out-Null
+$env:TEMP = $tempDir
+$env:TMP = $tempDir
+
 $projs = @()
 foreach ($dir in @('src', 'tests')) {
     $full = Join-Path $root $dir

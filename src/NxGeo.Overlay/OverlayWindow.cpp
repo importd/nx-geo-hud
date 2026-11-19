@@ -2,6 +2,7 @@
 
 #include <string>
 
+#include "Log.h"
 #include "Native.h"
 #include "NxGeoConst.h"
 #include "ObjKind.h"
@@ -123,6 +124,11 @@ bool OverlayWindow::Create(HINSTANCE instance, unsigned long long nxHwnd, int nx
 
     channel_ = new SnapshotChannel(NxGeoConst::SharedMemoryName(nxPid), false);
     wakeEvent_ = OpenEventW(SYNCHRONIZE, FALSE, Utf8ToWide(NxGeoConst::EventName(nxPid)).c_str());
+
+    NxGeoLog::Write("overlay created: nxpid=" + std::to_string(nxPid) +
+                    " hwnd=" + std::to_string(reinterpret_cast<unsigned long long>(nxHwnd_)) +
+                    " channel=" + (channel_->IsValid() ? "ok" : "MISSING") +
+                    " event=" + (wakeEvent_ ? "ok" : "missing"));
     return true;
 }
 
@@ -133,8 +139,21 @@ void OverlayWindow::Tick() {
     const bool readOk = channel_->TryRead(snapshot);
     const bool mismatch = channel_->VersionMismatch();
     const bool isEmpty = readOk && snapshot.kind == static_cast<unsigned short>(ObjKind::None);
+    const OverlayState state = DecideOverlayState(readOk, mismatch, isEmpty);
 
-    switch (DecideOverlayState(readOk, mismatch, isEmpty)) {
+    const bool stay = ShouldStayVisible();
+    const std::string desc = "tick: state=" + std::to_string(static_cast<int>(state)) +
+                             " readOk=" + (readOk ? "1" : "0") +
+                             " mismatch=" + (mismatch ? "1" : "0") +
+                             " kind=" + std::to_string(snapshot.kind) +
+                             " tag=" + std::to_string(snapshot.tag) +
+                             " stay=" + (stay ? "1" : "0");
+    if (desc != lastLogged_) {
+        NxGeoLog::Write(desc);
+        lastLogged_ = desc;
+    }
+
+    switch (state) {
         case OverlayState::Hide:
             ShowWindow(hwnd_, SW_HIDE);
             return;
@@ -146,7 +165,7 @@ void OverlayWindow::Tick() {
             break;
     }
 
-    if (!ShouldStayVisible()) {
+    if (!stay) {
         ShowWindow(hwnd_, SW_HIDE);
         return;
     }
