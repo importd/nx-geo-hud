@@ -1,4 +1,4 @@
-#include "OverlayWindow.h"
+﻿#include "OverlayWindow.h"
 
 #include <cstdlib>
 #include <fstream>
@@ -152,6 +152,34 @@ LRESULT OverlayWindow::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
             NxGeoLog::Write("menu: WM_RBUTTONUP received");
             ShowTrayMenu();          // 面板上右键也出同一个菜单
             return 0;
+        case WM_LBUTTONDOWN:
+            dragging_ = true;
+            GetCursorPos(&dragStartCursor_);
+            GetWindowRect(hwnd_, &dragStartRect_);
+            SetCapture(hwnd_);
+            return 0;
+        case WM_MOUSEMOVE:
+            if (dragging_) {
+                POINT now{};
+                GetCursorPos(&now);
+                const int nx = dragStartRect_.left + (now.x - dragStartCursor_.x);
+                const int ny = dragStartRect_.top + (now.y - dragStartCursor_.y);
+                followCursor_ = false;
+                anchorX_ = nx;
+                anchorY_ = ny;
+                lastX_ = nx;
+                lastY_ = ny;
+                SetWindowPos(hwnd_, HWND_TOPMOST, nx, ny, 0, 0,
+                             SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+            }
+            return 0;
+        case WM_LBUTTONUP:
+            if (dragging_) {
+                dragging_ = false;
+                ReleaseCapture();
+                SaveLayout();
+            }
+            return 0;
         case WM_PAINT: {
             PAINTSTRUCT ps;
             HDC dc = BeginPaint(hwnd_, &ps);
@@ -212,6 +240,7 @@ bool OverlayWindow::Create(HINSTANCE instance, unsigned long long nxHwnd, int nx
                         ((ex & WS_EX_TRANSPARENT) ? "1" : "0") + " NOACTIVATE=" +
                         ((ex & WS_EX_NOACTIVATE) ? "1" : "0"));
     }
+    LoadLayout();
     AddTrayIcon();
 
     if (nxHwnd_ && IsWindow(nxHwnd_)) {
@@ -289,7 +318,9 @@ enum TrayCommand {
     kTrayPin = 2,
     kTrayClickThrough = 3,
     kTrayHide = 4,
-    kTrayQuit = 5
+    kTrayQuit = 5,
+    kTrayFollow = 6,
+    kTrayReset = 7
 };
 
 void OverlayWindow::AddTrayIcon() {
@@ -340,6 +371,8 @@ void OverlayWindow::ShowTrayMenu() {
     AppendMenuW(menu, MF_STRING, kTrayCopy, L"复制信息\tCtrl+C");
     AppendMenuW(menu, MF_STRING | (pinned_ ? MF_CHECKED : 0), kTrayPin, L"钉住面板\tCtrl+P");
     AppendMenuW(menu, MF_STRING | (clickThrough_ ? MF_CHECKED : 0), kTrayClickThrough, L"鼠标点穿\tCtrl+T");
+    AppendMenuW(menu, MF_STRING | (followCursor_ ? MF_CHECKED : 0), kTrayFollow, L"跟随鼠标");
+    AppendMenuW(menu, MF_STRING, kTrayReset, L"恢复默认位置");
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(menu, MF_STRING, kTrayHide, L"隐藏面板\tCtrl+Alt+G");
     AppendMenuW(menu, MF_STRING, kTrayQuit, L"退出");
@@ -453,25 +486,76 @@ void OverlayWindow::Reposition() {
     RECT nxRect{};
     GetWindowRect(nx, &nxRect);
 
-    POINT cursor{};
-    GetCursorPos(&cursor);
+    int x = 0;
+    int y = 0;
 
-    // 鼠标已经移到面板上时就别再跟着跑，否则右键永远落不到面板里
-    RECT self{};
-    if (GetWindowRect(hwnd_, &self) &&
-        PointInRect(cursor.x, cursor.y, self.left, self.top, self.right, self.bottom)) {
-        return;
+    if (followCursor_) {
+        POINT cursor{};
+        GetCursorPos(&cursor);
+
+        // 跟随模式下，鼠标进到面板里就停住，不然右键落不上
+        RECT self{};
+        if (GetWindowRect(hwnd_, &self) &&
+            PointInRect(cursor.x, cursor.y, self.left, self.top, self.right, self.bottom)) {
+            return;
+        }
+
+        const Placement p = ComputePlacement(cursor.x, cursor.y, width_, height_,
+                                             nxRect.left, nxRect.top, nxRect.right, nxRect.bottom);
+        x = p.x;
+        y = p.y;
+    } else {
+        if (anchorX_ == INT_MIN || anchorY_ == INT_MIN) {
+            ResetToDefaultPosition();
+        }
+        x = anchorX_;
+        y = anchorY_;
+
+        // 固定在 NX 窗口内（窗口挪动/缩放后也不会跑丢）
+        if (x < nxRect.left + 4) x = nxRect.left + 4;
+        if (y < nxRect.top + 4) y = nxRect.top + 4;
+        if (x + width_ > nxRect.right - 4) x = nxRect.right - width_ - 4;
+        if (y + height_ > nxRect.bottom - 4) y = nxRect.bottom - height_ - 4;
+        anchorX_ = x;
+        anchorY_ = y;
     }
 
-    const Placement p = ComputePlacement(cursor.x, cursor.y, width_, height_,
-                                         nxRect.left, nxRect.top, nxRect.right, nxRect.bottom);
-
-    if (p.x != lastX_ || p.y != lastY_) {
-        lastX_ = p.x;
-        lastY_ = p.y;
-        SetWindowPos(hwnd_, HWND_TOPMOST, p.x, p.y, 0, 0,
+    if (x != lastX_ || y != lastY_) {
+        lastX_ = x;
+        lastY_ = y;
+        SetWindowPos(hwnd_, HWND_TOPMOST, x, y, 0, 0,
                      SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
     }
+}
+
+void OverlayWindow::ResetToDefaultPosition() {
+    const HWND nx = NxWindow();
+    if (nx == nullptr) return;
+
+    RECT nxRect{};
+    GetWindowRect(nx, &nxRect);
+
+    anchorX_ = nxRect.right - width_ - 20;   // 右上角
+    anchorY_ = nxRect.top + 20;
+    lastX_ = INT_MIN;
+    lastY_ = INT_MIN;
+}
+
+void OverlayWindow::LoadLayout() {
+    std::ifstream file(ExeDir() + L"\\nxgeo.layout");
+    int x = 0;
+    int y = 0;
+    int follow = 0;
+    if (file >> x >> y >> follow) {
+        anchorX_ = x;
+        anchorY_ = y;
+        followCursor_ = (follow != 0);
+    }
+}
+
+void OverlayWindow::SaveLayout() {
+    std::ofstream file(ExeDir() + L"\\nxgeo.layout");
+    file << anchorX_ << " " << anchorY_ << " " << (followCursor_ ? 1 : 0) << "\n";
 }
 
 // 按当前内容里最宽的一行算宽度（标题列固定 + 值列实测），并夹在合理区间

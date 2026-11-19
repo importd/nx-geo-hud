@@ -28,6 +28,9 @@ private:
     void ShowTrayMenu();
     void AddTrayIcon();
     void RemoveTrayIcon();
+    void LoadLayout();
+    void SaveLayout();
+    void ResetToDefaultPosition();
 
     HWND             hwnd_ = nullptr;
     HWND             nxHwnd_ = nullptr;
@@ -40,6 +43,12 @@ private:
     bool             clickThrough_ = false;   // 默认接收鼠标，右键才能出菜单
     bool             enabled_ = true;
     bool             pinned_ = false;
+    bool             followCursor_ = false;   // 默认固定位置，不追鼠标
+    bool             dragging_ = false;
+    POINT            dragStartCursor_{};
+    RECT             dragStartRect_{};
+    int              anchorX_ = INT_MIN;      // 固定模式的左上角
+    int              anchorY_ = INT_MIN;
     std::string      lastLogged_;
     int              paintedRevision_ = -1;
     int              lastX_ = INT_MIN;
