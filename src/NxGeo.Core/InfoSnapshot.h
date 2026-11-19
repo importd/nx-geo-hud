@@ -13,7 +13,7 @@ struct InfoSnapshot {
     unsigned           tag = 0;
     unsigned           fields = Field_None;
 
-    char               typeName[32] = { 0 };
+    char               typeName[48] = { 0 };
     int                color = 0;
     int                layer = 0;
 

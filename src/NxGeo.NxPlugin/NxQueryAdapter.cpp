@@ -1,4 +1,4 @@
-﻿#include "NxQueryAdapter.h"
+#include "NxQueryAdapter.h"
 
 #include <cstring>
 #include <exception>
@@ -62,6 +62,41 @@ const char* const kAreaUnits[] = { "SquareMilliMeter", "SquareMillimeter", "mm^2
 
 }  // namespace
 
+namespace {
+
+const char* FaceTypeName(int surfType) {
+    switch (surfType) {
+        case 16: return "圆柱面";
+        case 17: return "圆锥面";
+        case 18: return "球面";
+        case 19: return "圆环面";
+        case 20: return "拉伸面";
+        case 22: return "平面";
+        case 23: return "倒圆面";
+        case 43: return "B曲面";
+        case 65: return "偏置面";
+        case 66: return "外来面";
+        default: return "面";
+    }
+}
+
+const char* EdgeTypeName(int edgeType) {
+    switch (edgeType) {
+        case 3001: return "直线边";
+        case 3002: return "圆弧边";
+        case 3003: return "椭圆弧边";
+        case 3004: return "相交线边";
+        case 3005: return "样条边";
+        case 3006: return "SP曲线边";
+        case 3007: return "外来边";
+        case 3008: return "等参边";
+        case 3009: return "裁剪曲线边";
+        default: return "边";
+    }
+}
+
+}  // namespace
+
 InfoSnapshot NxQueryAdapter::QueryL0(const ObjRef& r) {
 
     InfoSnapshot s{};
@@ -86,7 +121,42 @@ InfoSnapshot NxQueryAdapter::QueryL0(const ObjRef& r) {
                 std::strncpy(s.typeName, "实体(来自特征)", sizeof s.typeName - 1);
             } else {
                 s.kind = static_cast<unsigned short>(TypeNameMap::KindOf(type, subtype));
-                const std::string name = TypeNameMap::NameOf(type, subtype);
+                std::string name = TypeNameMap::NameOf(type, subtype);
+
+                if (s.kind == static_cast<unsigned short>(ObjKind::Face)) {
+                    // 具体子类型 + 半径/半角
+                    int surfType = 0;
+                    double point[3] = { 0 }, dir[3] = { 0 }, box[6] = { 0 };
+                    double radius = 0.0, radData = 0.0;
+                    int normDir = 0;
+                    if (UF_MODL_ask_face_data(t, &surfType, point, dir, box,
+                                              &radius, &radData, &normDir) == 0) {
+                        char extra[64] = { 0 };
+                        switch (surfType) {
+                            case 16:
+                            case 18:
+                                std::snprintf(extra, sizeof extra, " R=%.3f", radius);
+                                break;
+                            case 17:
+                                std::snprintf(extra, sizeof extra, " R=%.3f 半角=%.1f°",
+                                              radius, radData * 57.29577951308232);
+                                break;
+                            case 19:
+                                std::snprintf(extra, sizeof extra, " R=%.3f r=%.3f",
+                                              radius, radData);
+                                break;
+                            default:
+                                break;
+                        }
+                        name = std::string(FaceTypeName(surfType)) + extra;
+                    }
+                } else if (s.kind == static_cast<unsigned short>(ObjKind::Edge)) {
+                    int edgeType = 0;
+                    if (UF_MODL_ask_edge_type(t, &edgeType) == 0) {
+                        name = EdgeTypeName(edgeType);
+                    }
+                }
+
                 std::strncpy(s.typeName, name.c_str(), sizeof s.typeName - 1);
             }
         }
