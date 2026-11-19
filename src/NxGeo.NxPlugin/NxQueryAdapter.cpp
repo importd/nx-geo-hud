@@ -104,6 +104,9 @@ InfoSnapshot NxQueryAdapter::QueryL0(const ObjRef& r) {
 
 void NxQueryAdapter::FillL1(const ObjRef& r, InfoSnapshot& s) {
 
+    // 体不需要 L1：包围盒在 L0 就有了，面积/长度/体积分别属于面和边
+    if (static_cast<ObjKind>(s.kind) == ObjKind::Body) return;
+
     try {
         NXOpen::Part* part = WorkPart();
         if (!part) {

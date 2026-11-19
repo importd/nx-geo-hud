@@ -7,7 +7,12 @@
 #include <NXOpen/TaggedObject.hxx>
 #include <NXOpen/UI.hxx>
 #include <uf.h>
+#include <uf_obj.h>
+#include <uf_part.h>
 #include <uf_ui.h>
+#include <uf_object_types.h>
+
+#include <string>
 
 #include "Log.h"
 
@@ -19,7 +24,38 @@ void SelectionCaptureSource::Stop() {
     sink_ = nullptr;
 }
 
+// 实验：NX 预选（悬停高亮）会不会把对象的 highlight_status 置真。
+// 会的话就能用"每拍扫一遍体"实现悬停，不需要射线求交。
+void ProbeHighlightedBodies() {
+    static std::string last;
+
+    const tag_t part = UF_PART_ask_display_part();
+    if (part == NULL_TAG) return;
+
+    std::string current;
+    tag_t object = NULL_TAG;
+    while (UF_OBJ_cycle_objs_in_part(part, UF_solid_type, &object) == 0 && object != NULL_TAG) {
+        int type = 0;
+        int subtype = 0;
+        if (UF_OBJ_ask_type_and_subtype(object, &type, &subtype) != 0) continue;
+        if (subtype != 0) continue;   // 只要体
+
+        UF_OBJ_disp_props_t props{};
+        if (UF_OBJ_ask_display_properties(object, &props) != 0) continue;
+        if (props.highlight_status) {
+            current += std::to_string(static_cast<unsigned>(object)) + " ";
+        }
+    }
+
+    if (current != last) {
+        NxGeoLog::Write("highlighted bodies: [" + current + "]");
+        last = current;
+    }
+}
+
 void SelectionCaptureSource::PollOnce() {
+    ProbeHighlightedBodies();
+
     if (!sink_) return;
 
     unsigned tagFromSelection = 0;
