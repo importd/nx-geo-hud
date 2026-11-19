@@ -1,4 +1,4 @@
-﻿#include "PluginEntry.h"
+#include "PluginEntry.h"
 
 #include <windows.h>
 
@@ -22,6 +22,8 @@ NxQueryAdapter*         g_query = nullptr;
 SnapshotChannel*        g_channel = nullptr;
 QueryScheduler*         g_scheduler = nullptr;
 HANDLE                  g_job = nullptr;
+HANDLE                  g_overlayProcess = nullptr;   // 看门狗用
+DWORD                   g_lastRelaunch = 0;
 bool                    g_running = false;
 
 // L2 任务在主线程 tick 里一个个跑，绝不开后台线程调 NX
@@ -57,6 +59,9 @@ void LaunchOverlay(int pid) {
     }
     NxGeoLog::Write("overlay launched, pid=" + std::to_string(pi.dwProcessId));
 
+    if (g_overlayProcess != nullptr) CloseHandle(g_overlayProcess);
+    g_overlayProcess = pi.hProcess;   // 留给看门狗检查
+
     g_job = CreateJobObjectW(nullptr, nullptr);
     if (g_job) {
         JOBOBJECT_EXTENDED_LIMIT_INFORMATION info{};
@@ -65,11 +70,28 @@ void LaunchOverlay(int pid) {
         AssignProcessToJobObject(g_job, pi.hProcess);
     }
     CloseHandle(pi.hThread);
-    CloseHandle(pi.hProcess);
+}
+
+// 浮窗进程挂了（崩溃/被结束）就自动重新拉起来，否则快捷键和面板一起消失
+void WatchOverlay() {
+    if (g_overlayProcess == nullptr) return;
+    if (WaitForSingleObject(g_overlayProcess, 0) != WAIT_OBJECT_0) return;   // 还活着
+
+    CloseHandle(g_overlayProcess);
+    g_overlayProcess = nullptr;
+
+    const DWORD now = GetTickCount();
+    if (now - g_lastRelaunch < 3000) return;   // 连续崩就不停重启
+    g_lastRelaunch = now;
+
+    NxGeoLog::Write("watchdog: overlay exited, relaunching");
+    LaunchOverlay(static_cast<int>(GetCurrentProcessId()));
 }
 
 // 主线程 tick：轮询选择 + 跑一个挂起的 L2
 void Tick() {
+    WatchOverlay();
+
     if (g_source != nullptr) g_source->PollOnce();
 
     if (!g_tasks.empty()) {

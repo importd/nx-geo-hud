@@ -1,4 +1,4 @@
-﻿#include "OverlayWindow.h"
+#include "OverlayWindow.h"
 
 #include <cstdlib>
 #include <fstream>
@@ -370,12 +370,10 @@ void OverlayWindow::ShowTrayMenu() {
 
     AppendMenuW(menu, MF_STRING, kTrayCopy, L"复制信息\tCtrl+C");
     AppendMenuW(menu, MF_STRING | (pinned_ ? MF_CHECKED : 0), kTrayPin, L"钉住面板\tCtrl+P");
-    AppendMenuW(menu, MF_STRING | (clickThrough_ ? MF_CHECKED : 0), kTrayClickThrough, L"鼠标点穿\tCtrl+T");
     AppendMenuW(menu, MF_STRING | (followCursor_ ? MF_CHECKED : 0), kTrayFollow, L"跟随鼠标");
     AppendMenuW(menu, MF_STRING, kTrayReset, L"恢复默认位置");
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(menu, MF_STRING, kTrayHide, L"隐藏面板\tCtrl+Alt+G");
-    AppendMenuW(menu, MF_STRING, kTrayQuit, L"退出");
 
     // 菜单项图标
     HBITMAP copyIcon = IconToMenuBitmap(static_cast<HICON>(LoadImageW(nullptr, IDI_INFORMATION, IMAGE_ICON, 16, 16, LR_SHARED)));
