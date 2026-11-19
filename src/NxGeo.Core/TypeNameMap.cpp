@@ -10,6 +10,7 @@ constexpr int kBodySubtype = 0;
 constexpr int kSweptSubtype = 1;
 constexpr int kFaceSubtype = 2;
 constexpr int kEdgeSubtype = 3;
+constexpr int kFeatureType = 205;   // UF_feature_type
 
 const std::map<std::pair<int, int>, std::string>& Table() {
     static const std::map<std::pair<int, int>, std::string> t = {
@@ -19,6 +20,7 @@ const std::map<std::pair<int, int>, std::string>& Table() {
         { { kSolidType, kSweptSubtype }, "扫掠体(内部)" },
         { { kSolidType, kFaceSubtype },  "面" },
         { { kSolidType, kEdgeSubtype },  "边" },
+        { { kFeatureType, 0 },           "特征" },
     };
     return t;
 }
@@ -28,6 +30,7 @@ const std::map<std::pair<int, int>, std::string>& Table() {
 namespace TypeNameMap {
 
 ObjKind KindOf(int type, int subtype) {
+    if (type == kFeatureType) return ObjKind::Other;   // 特征由插件映射到它生成的体
     if (type != kSolidType) return ObjKind::Other;
     switch (subtype) {
         case kBodySubtype: return ObjKind::Body;

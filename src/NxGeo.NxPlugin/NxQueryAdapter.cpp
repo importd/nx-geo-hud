@@ -1,4 +1,4 @@
-﻿#include "NxQueryAdapter.h"
+#include "NxQueryAdapter.h"
 
 #include <cstring>
 #include <exception>
@@ -7,6 +7,7 @@
 #include <uf.h>
 #include <uf_modl.h>
 #include <uf_obj.h>
+#include <uf_object_types.h>
 
 #include <NXOpen/DisplayableObject.hxx>
 #include <NXOpen/Edge.hxx>
@@ -54,14 +55,27 @@ InfoSnapshot NxQueryAdapter::QueryL0(const ObjRef& r) {
     s.tag = r.tag;
     s.kind = static_cast<unsigned short>(r.kind);
 
-    const tag_t t = static_cast<tag_t>(r.tag);
+    const tag_t t0 = static_cast<tag_t>(r.tag);
+    tag_t t = t0;
     try {
         int type = 0;
         int subtype = 0;
-        if (UF_OBJ_ask_type_and_subtype(t, &type, &subtype) == 0) {
-            s.kind = static_cast<unsigned short>(TypeNameMap::KindOf(type, subtype));
-            const std::string name = TypeNameMap::NameOf(type, subtype);
-            std::strncpy(s.typeName, name.c_str(), sizeof s.typeName - 1);
+        if (UF_OBJ_ask_type_and_subtype(t0, &type, &subtype) == 0) {
+            if (type == UF_feature_type) {
+                // NX10 在无命令状态下点选，拿到的是特征而不是体/面/边：
+                // 映射到该特征生成的体，后续按体处理。
+                tag_t body = NULL_TAG;
+                if (UF_MODL_ask_feat_body(t0, &body) == 0 && body != NULL_TAG) {
+                    t = body;
+                    s.tag = static_cast<unsigned>(body);
+                }
+                s.kind = static_cast<unsigned short>(ObjKind::Body);
+                std::strncpy(s.typeName, "实体(来自特征)", sizeof s.typeName - 1);
+            } else {
+                s.kind = static_cast<unsigned short>(TypeNameMap::KindOf(type, subtype));
+                const std::string name = TypeNameMap::NameOf(type, subtype);
+                std::strncpy(s.typeName, name.c_str(), sizeof s.typeName - 1);
+            }
         }
 
         UF_OBJ_disp_props_t props{};
@@ -97,7 +111,8 @@ void NxQueryAdapter::FillL1(const ObjRef& r, InfoSnapshot& s) {
             return;
         }
 
-        NXOpen::TaggedObject* obj = NXOpen::NXObjectManager::Get(static_cast<tag_t>(r.tag));
+        NXOpen::TaggedObject* obj =
+            NXOpen::NXObjectManager::Get(static_cast<tag_t>(s.tag != 0 ? s.tag : r.tag));
         if (!obj) {
             SetNote(s, "对象已删除");
             return;
@@ -106,7 +121,8 @@ void NxQueryAdapter::FillL1(const ObjRef& r, InfoSnapshot& s) {
         NXOpen::Unit* lengthUnit = FindUnit(part, "Millimeter");
         NXOpen::Unit* areaUnit = FindUnit(part, "SquareMillimeter");
 
-        if (r.kind == ObjKind::Face) {
+        const ObjKind kind = static_cast<ObjKind>(s.kind);
+        if (kind == ObjKind::Face) {
             NXOpen::Face* face = dynamic_cast<NXOpen::Face*>(obj);
             if (face) {
                 std::vector<NXOpen::IParameterizedSurface*> faces;
@@ -118,7 +134,7 @@ void NxQueryAdapter::FillL1(const ObjRef& r, InfoSnapshot& s) {
                     s.fields |= Field_Area;
                 }
             }
-        } else if (r.kind == ObjKind::Edge || r.kind == ObjKind::Curve) {
+        } else if (kind == ObjKind::Edge || kind == ObjKind::Curve) {
             NXOpen::DisplayableObject* d = dynamic_cast<NXOpen::DisplayableObject*>(obj);
             if (d) {
                 std::vector<NXOpen::DisplayableObject*> objs;
@@ -139,9 +155,12 @@ void NxQueryAdapter::FillL1(const ObjRef& r, InfoSnapshot& s) {
 
 void NxQueryAdapter::FillL2(const ObjRef& r, InfoSnapshot& s) {
 
+    const tag_t handle = static_cast<tag_t>(s.tag != 0 ? s.tag : r.tag);
+    const ObjKind kind = static_cast<ObjKind>(s.kind);
+
     try {
-        if (r.kind == ObjKind::Body) {
-            tag_t t = static_cast<tag_t>(r.tag);
+        if (kind == ObjKind::Body) {
+            tag_t t = handle;
             double accuracy[11] = { 0 };
             accuracy[0] = 0.99;
             double mp[47] = { 0 };
@@ -153,10 +172,10 @@ void NxQueryAdapter::FillL2(const ObjRef& r, InfoSnapshot& s) {
             }
         }
 
-        if (distanceTarget_ != 0 && distanceTarget_ != r.tag) {
+        if (distanceTarget_ != 0 && distanceTarget_ != handle) {
             NXOpen::Part* part = WorkPart();
             if (!part) return;
-            NXOpen::TaggedObject* a = NXOpen::NXObjectManager::Get(static_cast<tag_t>(r.tag));
+            NXOpen::TaggedObject* a = NXOpen::NXObjectManager::Get(handle);
             NXOpen::TaggedObject* b = NXOpen::NXObjectManager::Get(static_cast<tag_t>(distanceTarget_));
             NXOpen::DisplayableObject* da = dynamic_cast<NXOpen::DisplayableObject*>(a);
             NXOpen::DisplayableObject* db = dynamic_cast<NXOpen::DisplayableObject*>(b);
