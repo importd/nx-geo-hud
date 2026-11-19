@@ -312,7 +312,6 @@ void OverlayWindow::Tick() {
         lastY_ = y;
         appliedW_ = wantedWidth;
         appliedH_ = wantedHeight;
-        cacheRevision_ = -1;
         SetWindowPos(hwnd_, HWND_TOPMOST, x, y, wantedWidth, wantedHeight,
                      SWP_NOACTIVATE | SWP_NOOWNERZORDER);
     }

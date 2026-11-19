@@ -96,25 +96,39 @@ void WatchOverlay() {
 }
 
 // 主线程 tick：轮询选择（L0+L1，必须快）+ 一个去抖后的 L2
+// 查询性能计数器，毫秒（浮点）：GetTickCount 只有 15.6ms 精度，会把 1ms 报成 16ms
+double NowMs() {
+    static LARGE_INTEGER frequency = { 0 };
+    if (frequency.QuadPart == 0) QueryPerformanceFrequency(&frequency);
+    LARGE_INTEGER counter;
+    QueryPerformanceCounter(&counter);
+    return static_cast<double>(counter.QuadPart) * 1000.0 / static_cast<double>(frequency.QuadPart);
+}
+
+std::string Ms(double value) {
+    char buf[32];
+    snprintf(buf, sizeof buf, "%.2f", value);
+    return std::string(buf);
+}
+
 void Tick() {
     WatchOverlay();
 
-    const DWORD t0 = GetTickCount();
+    const double t0 = NowMs();
     if (g_source != nullptr) g_source->PollOnce();
-    const DWORD t1 = GetTickCount();
+    const double t1 = NowMs();
 
     // 去抖：选择稳定 120ms 后才算质量属性/距离，快速连点时不重算
-    DWORD l2ms = 0;
+    double l2ms = 0.0;
     if (g_pendingTask && static_cast<long>(GetTickCount() - g_pendingDue) >= 0) {
         std::unique_ptr<QueryScheduler::Task> task = std::move(g_pendingTask);
         (*task)();
-        l2ms = GetTickCount() - t1;
+        l2ms = NowMs() - t1;
     }
 
-    const DWORD pollms = t1 - t0;
-    if (pollms + l2ms > 8) {   // 只在偏慢时留痕，正常不写日志
-        NxGeoLog::Write("slow: poll=" + std::to_string(pollms) + "ms l2=" +
-                        std::to_string(l2ms) + "ms");
+    const double pollms = t1 - t0;
+    if (pollms + l2ms > 8.0) {   // 只在偏慢时留痕，正常不写日志
+        NxGeoLog::Write("slow: poll=" + Ms(pollms) + "ms l2=" + Ms(l2ms) + "ms");
     }
 }
 
