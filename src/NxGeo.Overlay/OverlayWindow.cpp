@@ -22,7 +22,7 @@ constexpr int kTitleWidth = 64;
 constexpr int kToolbarHeight = 20;
 constexpr int kButton = 16;
 constexpr int kButtonGap = 2;
-constexpr int kButtonCount = 4;          // 取消选择 / 移动 / 复位 / 关闭
+constexpr int kButtonCount = 3;          // 取消选择 / 复位 / 关闭
 constexpr wchar_t kClassName[] = L"NxGeoOverlayWindow";
 constexpr BYTE kAlpha = 170;
 
@@ -425,20 +425,14 @@ void OverlayWindow::DrawToolbar(HDC dc) {
                 MoveToEx(dc, x + 5, y + 5, nullptr);
                 LineTo(dc, x + 11, y + 11);
                 break;
-            case 1:   // 移动：四向箭头
-                MoveToEx(dc, x + 2, y + 8, nullptr);   LineTo(dc, x + 14, y + 8);
-                MoveToEx(dc, x + 8, y + 2, nullptr);   LineTo(dc, x + 8, y + 14);
-                MoveToEx(dc, x + 5, y + 5, nullptr);   LineTo(dc, x + 2, y + 8);  LineTo(dc, x + 5, y + 11);
-                MoveToEx(dc, x + 11, y + 5, nullptr);  LineTo(dc, x + 14, y + 8); LineTo(dc, x + 11, y + 11);
-                break;
-            case 2:   // 复位：回转箭头
+            case 1:   // 复位：回转箭头
                 Arc(dc, x + 2, y + 2, x + 14, y + 14, x + 14, y + 8, x + 8, y + 2);
                 MoveToEx(dc, x + 8, y + 2, nullptr);
                 LineTo(dc, x + 11, y + 2);
                 MoveToEx(dc, x + 8, y + 2, nullptr);
                 LineTo(dc, x + 8, y + 5);
                 break;
-            case 3: { // 关闭：红叉
+            case 2: { // 关闭：红叉
                 HPEN red = CreatePen(PS_SOLID, 2, RGB(230, 90, 80));
                 HGDIOBJ previous = SelectObject(dc, red);
                 MoveToEx(dc, x + 4, y + 4, nullptr);   LineTo(dc, x + 12, y + 12);
@@ -474,19 +468,13 @@ void OverlayWindow::PerformToolbarAction(int index) {
                 ShowWindow(hwnd_, SW_HIDE);
             }
             break;
-        case 1:   // 移动：进入拖动
-            dragging_ = true;
-            GetCursorPos(&dragStartCursor_);
-            GetWindowRect(hwnd_, &dragStartRect_);
-            SetCapture(hwnd_);
-            break;
-        case 2:   // 复位：新对象重新贴到点击位置
+        case 1:   // 复位：新对象重新贴到点击位置
             autoPlace_ = true;
             PlaceAtCursor();
             Reposition();
             SaveLayout();
             break;
-        case 3:   // 关闭：隐藏到下一个对象
+        case 2:   // 关闭：隐藏到下一个对象
             dismissed_ = true;
             ShowWindow(hwnd_, SW_HIDE);
             break;
