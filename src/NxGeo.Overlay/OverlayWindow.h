@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <windows.h>
 
@@ -30,7 +30,7 @@ private:
     SnapshotChannel* channel_ = nullptr;
     HANDLE           wakeEvent_ = nullptr;
     InfoViewModel    vm_;
-    int              width_ = 340;
+    int              width_ = 430;
     int              height_ = 120;
     bool             clickThrough_ = true;
     bool             enabled_ = true;

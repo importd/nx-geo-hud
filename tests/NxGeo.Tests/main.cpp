@@ -1,4 +1,4 @@
-#include "Check.h"
+﻿#include "Check.h"
 
 #include <cstring>
 #include <stdexcept>
@@ -239,7 +239,7 @@ static void TestViewModelShowsOnlyFilledFields() {
     for (const auto& row : vm.Rows()) {
         if (row.visible) ++visible;
     }
-    CHECK_EQ(visible, 3);   // 类型 / tag / 颜色
+    CHECK_EQ(visible, 4);   // 类型 / tag / 颜色 / 图层
 
     s.fields |= Field_Area;
     s.area = 12.5;

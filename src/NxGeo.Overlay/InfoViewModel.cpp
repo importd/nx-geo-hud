@@ -1,4 +1,4 @@
-#include "InfoViewModel.h"
+﻿#include "InfoViewModel.h"
 
 #include <cstdio>
 
@@ -9,12 +9,6 @@ namespace {
 std::string Fixed3(double v) {
     char buf[64];
     std::snprintf(buf, sizeof buf, "%.3f", v);
-    return std::string(buf);
-}
-
-std::string HexTag(unsigned tag) {
-    char buf[16];
-    std::snprintf(buf, sizeof buf, "0x%08X", tag);
     return std::string(buf);
 }
 
@@ -62,16 +56,17 @@ void InfoViewModel::Apply(const InfoSnapshot& s) {
     if (HasField(s.fields, Field_L0)) {
         next[0].value = s.typeName;
         next[0].visible = true;
-        next[1].value = HexTag(s.tag);
+        next[1].value = std::to_string(s.tag);          // 十进制 tag
         next[1].visible = true;
         next[2].value = std::to_string(s.color);
         next[2].visible = true;
+        next[3].value = std::to_string(s.layer);        // 图层
+        next[3].visible = true;
     }
 
     if (HasField(s.fields, Field_BBox)) {
         char buf[160];
-        std::snprintf(buf, sizeof buf,
-                      "min(%.1f, %.1f, %.1f) max(%.1f, %.1f, %.1f)",
+        std::snprintf(buf, sizeof buf, "%.1f,%.1f,%.1f → %.1f,%.1f,%.1f",
                       s.bboxMin[0], s.bboxMin[1], s.bboxMin[2],
                       s.bboxMax[0], s.bboxMax[1], s.bboxMax[2]);
         next[4].value = buf;

@@ -1,4 +1,4 @@
-#include "NxQueryAdapter.h"
+﻿#include "NxQueryAdapter.h"
 
 #include <cstring>
 #include <exception>
@@ -42,10 +42,23 @@ NXOpen::Part* WorkPart() {
     return session->Parts()->Work();
 }
 
-NXOpen::Unit* FindUnit(NXOpen::Part* part, const char* name) {
+// NX 的单位对象名并不统一（MilliMeter / Millimeter / mm 都见过），
+// FindObject 找不到会抛 "No object found with this name"，所以逐个试并吞掉异常。
+NXOpen::Unit* FindUnit(NXOpen::Part* part, const char* const* candidates) {
     if (!part) return nullptr;
-    return part->UnitCollection()->FindObject(name);
+    for (int i = 0; candidates[i] != nullptr; ++i) {
+        try {
+            NXOpen::Unit* unit = part->UnitCollection()->FindObject(candidates[i]);
+            if (unit != nullptr) return unit;
+        } catch (...) {
+            // 换下一个候选名
+        }
+    }
+    return nullptr;
 }
+
+const char* const kLengthUnits[] = { "MilliMeter", "Millimeter", "mm", nullptr };
+const char* const kAreaUnits[] = { "SquareMilliMeter", "SquareMillimeter", "mm^2", nullptr };
 
 }  // namespace
 
@@ -121,8 +134,8 @@ void NxQueryAdapter::FillL1(const ObjRef& r, InfoSnapshot& s) {
             return;
         }
         NXOpen::MeasureManager* mm = part->MeasureManager();
-        NXOpen::Unit* lengthUnit = FindUnit(part, "Millimeter");
-        NXOpen::Unit* areaUnit = FindUnit(part, "SquareMillimeter");
+        NXOpen::Unit* lengthUnit = FindUnit(part, kLengthUnits);
+        NXOpen::Unit* areaUnit = FindUnit(part, kAreaUnits);
 
         const ObjKind kind = static_cast<ObjKind>(s.kind);
         if (kind == ObjKind::Face) {
@@ -176,19 +189,18 @@ void NxQueryAdapter::FillL2(const ObjRef& r, InfoSnapshot& s) {
         }
 
         if (distanceTarget_ != 0 && distanceTarget_ != handle) {
-            NXOpen::Part* part = WorkPart();
-            if (!part) return;
-            NXOpen::TaggedObject* a = NXOpen::NXObjectManager::Get(handle);
-            NXOpen::TaggedObject* b = NXOpen::NXObjectManager::Get(static_cast<tag_t>(distanceTarget_));
-            NXOpen::DisplayableObject* da = dynamic_cast<NXOpen::DisplayableObject*>(a);
-            NXOpen::DisplayableObject* db = dynamic_cast<NXOpen::DisplayableObject*>(b);
-            if (da && db) {
-                NXOpen::MeasureDistance* m = part->MeasureManager()->NewDistance(
-                    FindUnit(part, "Millimeter"), NXOpen::MeasureManager::MeasureTypeMinimum, da, db);
-                if (m) {
-                    s.distance = m->Value();
-                    s.fields |= Field_Distance;
-                }
+            // 用 UFUN 算最小距离：NXOpen 的 NewDistance 需要先解析对象指针，体/面/边更稳
+            double guess[3] = { 0.0, 0.0, 0.0 };
+            double pt1[3] = { 0.0, 0.0, 0.0 };
+            double pt2[3] = { 0.0, 0.0, 0.0 };
+            double minDist = 0.0;
+            double accuracy = 0.0;
+            if (UF_MODL_ask_minimum_dist_2(handle, static_cast<tag_t>(distanceTarget_),
+                                           0, guess, 0, guess,
+                                           &minDist, pt1, pt2, &accuracy) == 0) {
+                s.distance = minDist;
+                s.fields |= Field_Distance;
+                std::strncpy(s.distanceTo, "上一个选中对象", sizeof s.distanceTo - 1);
             }
         }
     } catch (const std::exception& e) {
@@ -206,8 +218,8 @@ bool NxQueryAdapter::SelfTest(std::string& report) {
     }
 
     NXOpen::MeasureManager* mm = part->MeasureManager();
-    const bool ok = (mm != nullptr) && (FindUnit(part, "Millimeter") != nullptr);
+    const bool ok = (mm != nullptr) && (FindUnit(part, kLengthUnits) != nullptr);
     report = std::string("work part ok, measure manager ") + (mm ? "ok" : "null") +
-             ", millimeter " + (FindUnit(part, "Millimeter") ? "ok" : "missing");
+             ", millimeter " + (FindUnit(part, kLengthUnits) ? "ok" : "missing");
     return ok;
 }
