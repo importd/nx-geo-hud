@@ -587,7 +587,7 @@ int OverlayWindow::Run() {
         }
 
         if (wakeEvent_) {
-            WaitForSingleObject(wakeEvent_, 16);
+            WaitForSingleObject(wakeEvent_, 100);   // 有事件立刻醒，没事件 100ms 兜底
         } else {
             Sleep(16);
         }

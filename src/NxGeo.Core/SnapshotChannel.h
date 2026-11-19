@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <string>
 
@@ -25,6 +25,7 @@ public:
     SnapshotChannel(const SnapshotChannel&) = delete;
     SnapshotChannel& operator=(const SnapshotChannel&) = delete;
 
+    void      SetWakeEvent(void* handle) { wakeEvent_ = handle; }
     void      SetNxHwnd(long long hwnd);
     void      SetNxPid(int pid);
     long long NxHwnd() const;
@@ -40,4 +41,5 @@ private:
     unsigned char*      slots_ = nullptr;
     unsigned long long  gen_ = 0;
     mutable bool        versionMismatch_ = false;
+    void*               wakeEvent_ = nullptr;   // 写入后 SetEvent，浮窗无需空转
 };

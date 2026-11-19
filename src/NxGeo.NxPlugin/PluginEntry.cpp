@@ -22,6 +22,7 @@ NxQueryAdapter*         g_query = nullptr;
 SnapshotChannel*        g_channel = nullptr;
 QueryScheduler*         g_scheduler = nullptr;
 HANDLE                  g_job = nullptr;
+HANDLE                  g_wakeEvent = nullptr;   // 写快照后通知浮窗
 HANDLE                  g_overlayProcess = nullptr;   // 看门狗用
 DWORD                   g_lastRelaunch = 0;
 bool                    g_running = false;
@@ -127,6 +128,14 @@ void Start() {
     const int pid = static_cast<int>(GetCurrentProcessId());
 
     g_channel = new SnapshotChannel(NxGeoConst::SharedMemoryName(pid), true);
+
+    // 自动复位事件：每次写入快照就唤醒浮窗，浮窗不用空转轮询
+    {
+        const std::string name = NxGeoConst::EventName(pid);
+        const std::wstring wideName(name.begin(), name.end());
+        g_wakeEvent = CreateEventW(nullptr, FALSE, FALSE, wideName.c_str());
+        g_channel->SetWakeEvent(g_wakeEvent);
+    }
     g_channel->SetNxPid(pid);
     g_channel->SetNxHwnd(static_cast<long long>(reinterpret_cast<ULONG_PTR>(GetForegroundWindow())));
     NxGeoLog::Write(std::string("channel ") + (g_channel->IsValid() ? "ok " : "FAILED ") +

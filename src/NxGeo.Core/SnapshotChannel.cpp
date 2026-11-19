@@ -1,4 +1,4 @@
-#include "SnapshotChannel.h"
+﻿#include "SnapshotChannel.h"
 
 #include <windows.h>
 
@@ -75,6 +75,10 @@ unsigned long long SnapshotChannel::Write(const InfoSnapshot& s) {
     MemoryBarrier();
     header_->activeGen = g;
     MemoryBarrier();
+
+    if (wakeEvent_ != nullptr) {
+        SetEvent(static_cast<HANDLE>(wakeEvent_));   // auto-reset，浮窗立刻醒
+    }
     return g;
 }
 
